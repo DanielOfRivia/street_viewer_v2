@@ -13,11 +13,14 @@ ksp = "2.2.10-2.0.2"
 hilt = "2.60.1"
 androidxHilt = "1.4.0"
 room = "2.8.4"
-sqliteBundled = "2.7.0"
 retrofit = "3.0.0"
 retrofitKotlinxSerializationConverter = "1.0.0"
 okhttp = "5.5.0"
-kotlinxSerializationJson = "1.11.0"
+# Pinned to what androidx.room:room-migration:2.8.4 itself declares (not "latest stable"):
+# a newer kotlinx-serialization-core adds a GeneratedSerializer method Room's own
+# precompiled bundle serializers don't implement, which crashes MigrationTestHelper
+# with AbstractMethodError at runtime.
+kotlinxSerializationJson = "1.8.1"
 kotlinxCoroutines = "1.11.0"
 workManager = "2.11.2"
 datastorePreferences = "1.2.1"
@@ -55,7 +58,6 @@ androidx-room-runtime = { group = "androidx.room", name = "room-runtime", versio
 androidx-room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "room" }
 androidx-room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }
 androidx-room-testing = { group = "androidx.room", name = "room-testing", version.ref = "room" }
-androidx-sqlite-bundled = { group = "androidx.sqlite", name = "sqlite-bundled", version.ref = "sqliteBundled" }
 
 retrofit-core = { group = "com.squareup.retrofit2", name = "retrofit", version.ref = "retrofit" }
 retrofit-kotlinx-serialization-converter = { group = "com.jakewharton.retrofit", name = "retrofit2-kotlinx-serialization-converter", version.ref = "retrofitKotlinxSerializationConverter" }

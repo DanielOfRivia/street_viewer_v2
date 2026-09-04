@@ -1,3 +1,18 @@
 <resources>
     <string name="app_name">street_viewer_v2</string>
+
+    <string name="tracking_point_count_label">points recorded</string>
+    <string name="tracking_start">Start Tracking</string>
+    <string name="tracking_stop">Stop Tracking</string>
+    <string name="tracking_open_settings">Open Settings</string>
+    <string name="tracking_permission_rationale">Street Viewer needs location access to record your track. Location is only collected while tracking is on.</string>
+    <string name="tracking_stop_reason_permission_missing">Tracking stopped: location permission isn\'t granted.</string>
+    <string name="tracking_stop_reason_start_foreground_failed">Tracking stopped: the system wouldn\'t let the tracking service start.</string>
+    <string name="tracking_stop_reason_location_request_failed">Tracking stopped: location updates couldn\'t be started.</string>
+    <string name="tracking_stop_reason_user_requested">Tracking stopped.</string>
+
+    <string name="tracking_notification_channel_name">Location tracking</string>
+    <string name="tracking_notification_channel_description">Shows when Street Viewer is recording your track</string>
+    <string name="tracking_notification_title">Recording track</string>
+    <string name="tracking_notification_point_count">%d points recorded</string>
 </resources>
