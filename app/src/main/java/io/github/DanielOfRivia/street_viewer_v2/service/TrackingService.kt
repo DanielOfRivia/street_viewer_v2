@@ -35,6 +35,14 @@ class TrackingService : Service() {
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val locationRequest = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, UPDATE_INTERVAL_MILLIS)
+        // setIntervalMillis (set above via the constructor) is only a target, not a floor:
+        // the fused provider can deliver a fresher/better fix ahead of schedule (observed
+        // on-device as low as ~14s between fixes with this left unset). This is the actual
+        // floor. Deliberately not paired with an app-level "reject if too early" guard: the
+        // provider's own next-delivery clock resets from whenever it last delivered
+        // regardless of whether the app used that fix, so rejecting a fix doesn't get a
+        // do-over on our schedule — it can just push the next one to 2x the interval away.
+        .setMinUpdateIntervalMillis(UPDATE_INTERVAL_MILLIS)
         .setMinUpdateDistanceMeters(MIN_UPDATE_DISTANCE_METERS)
         .build()
 
