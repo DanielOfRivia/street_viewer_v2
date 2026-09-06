@@ -5,8 +5,8 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import dagger.hilt.android.AndroidEntryPoint
+import io.github.DanielOfRivia.street_viewer_v2.ui.AppRoot
 import io.github.DanielOfRivia.street_viewer_v2.ui.theme.Street_viewer_v2Theme
-import io.github.DanielOfRivia.street_viewer_v2.ui.tracking.TrackingRoute
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
@@ -15,7 +15,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             Street_viewer_v2Theme {
-                TrackingRoute()
+                AppRoot()
             }
         }
     }

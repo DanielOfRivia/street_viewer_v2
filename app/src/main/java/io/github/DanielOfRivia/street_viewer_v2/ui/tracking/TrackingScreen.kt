@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -29,52 +28,49 @@ fun TrackingScreen(
     onOpenSettingsClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Scaffold(modifier = modifier.fillMaxSize()) { innerPadding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-                .padding(24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Text(text = uiState.pointCount.toString(), style = MaterialTheme.typography.displayLarge)
+        Text(
+            text = stringResource(R.string.tracking_point_count_label),
+            style = MaterialTheme.typography.bodyMedium,
+        )
+
+        Spacer(Modifier.height(32.dp))
+
+        TrackingActionButton(
+            uiState = uiState,
+            onStartClick = onStartClick,
+            onStopClick = onStopClick,
+            onOpenSettingsClick = onOpenSettingsClick,
+        )
+
+        if (uiState.permissionState == LocationPermissionState.Unknown ||
+            uiState.permissionState == LocationPermissionState.Denied
         ) {
-            Text(text = uiState.pointCount.toString(), style = MaterialTheme.typography.displayLarge)
+            Spacer(Modifier.height(16.dp))
             Text(
-                text = stringResource(R.string.tracking_point_count_label),
-                style = MaterialTheme.typography.bodyMedium,
+                text = stringResource(R.string.tracking_permission_rationale),
+                style = MaterialTheme.typography.bodySmall,
+                textAlign = TextAlign.Center,
             )
+        }
 
-            Spacer(Modifier.height(32.dp))
-
-            TrackingActionButton(
-                uiState = uiState,
-                onStartClick = onStartClick,
-                onStopClick = onStopClick,
-                onOpenSettingsClick = onOpenSettingsClick,
+        if (!uiState.isTracking && uiState.stopReason != null &&
+            uiState.stopReason != TrackingStopReason.USER_REQUESTED
+        ) {
+            Spacer(Modifier.height(16.dp))
+            Text(
+                text = stringResource(uiState.stopReason.messageRes()),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+                textAlign = TextAlign.Center,
             )
-
-            if (uiState.permissionState == LocationPermissionState.Unknown ||
-                uiState.permissionState == LocationPermissionState.Denied
-            ) {
-                Spacer(Modifier.height(16.dp))
-                Text(
-                    text = stringResource(R.string.tracking_permission_rationale),
-                    style = MaterialTheme.typography.bodySmall,
-                    textAlign = TextAlign.Center,
-                )
-            }
-
-            if (!uiState.isTracking && uiState.stopReason != null &&
-                uiState.stopReason != TrackingStopReason.USER_REQUESTED
-            ) {
-                Spacer(Modifier.height(16.dp))
-                Text(
-                    text = stringResource(uiState.stopReason.messageRes()),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
-                    textAlign = TextAlign.Center,
-                )
-            }
         }
     }
 }

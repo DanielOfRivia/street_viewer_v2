@@ -15,4 +15,10 @@
     <string name="tracking_notification_channel_description">Shows when Street Viewer is recording your track</string>
     <string name="tracking_notification_title">Recording track</string>
     <string name="tracking_notification_point_count">%d points recorded</string>
+
+    <string name="tab_track">Track</string>
+    <string name="tab_map">Map</string>
+
+    <string name="map_empty_state">No points recorded yet. Start tracking to see your route here.</string>
+    <string name="map_newest_position_marker_title">Current position</string>
 </resources>
