@@ -3,7 +3,9 @@ package io.github.DanielOfRivia.street_viewer_v2.ui.tracking
 import app.cash.turbine.test
 import io.github.DanielOfRivia.street_viewer_v2.domain.model.LocationPoint
 import io.github.DanielOfRivia.street_viewer_v2.domain.model.TrackingStopReason
+import io.github.DanielOfRivia.street_viewer_v2.domain.model.SyncSchedulerState
 import io.github.DanielOfRivia.street_viewer_v2.testutil.FakeLocationPointRepository
+import io.github.DanielOfRivia.street_viewer_v2.testutil.FakeSyncScheduler
 import io.github.DanielOfRivia.street_viewer_v2.testutil.FakeTrackingStatusRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -25,6 +27,7 @@ class TrackingViewModelTest {
     private val dispatcher = StandardTestDispatcher()
     private lateinit var locationPointRepository: FakeLocationPointRepository
     private lateinit var trackingStatusRepository: FakeTrackingStatusRepository
+    private lateinit var syncScheduler: FakeSyncScheduler
     private lateinit var viewModel: TrackingViewModel
 
     @Before
@@ -32,7 +35,8 @@ class TrackingViewModelTest {
         Dispatchers.setMain(dispatcher)
         locationPointRepository = FakeLocationPointRepository()
         trackingStatusRepository = FakeTrackingStatusRepository()
-        viewModel = TrackingViewModel(locationPointRepository, trackingStatusRepository)
+        syncScheduler = FakeSyncScheduler()
+        viewModel = TrackingViewModel(locationPointRepository, trackingStatusRepository, syncScheduler)
     }
 
     @After
@@ -86,6 +90,26 @@ class TrackingViewModelTest {
             viewModel.onPermissionStateChanged(LocationPermissionState.PermanentlyDenied)
             assertEquals(LocationPermissionState.PermanentlyDenied, awaitItem().permissionState)
         }
+    }
+
+    @Test
+    fun syncStateReflectsSchedulerState() = runTest(dispatcher) {
+        viewModel.uiState.test {
+            awaitItem()
+
+            syncScheduler.emit(SyncSchedulerState.Running)
+            assertEquals(SyncSchedulerState.Running, awaitItem().syncState)
+
+            syncScheduler.emit(SyncSchedulerState.Succeeded(uploadedCount = 0))
+            assertEquals(SyncSchedulerState.Succeeded(0), awaitItem().syncState)
+        }
+    }
+
+    @Test
+    fun onSyncClickDelegatesToScheduler() {
+        viewModel.onSyncClick()
+
+        assertEquals(1, syncScheduler.requestSyncCallCount)
     }
 
     private fun samplePoint() = LocationPoint(

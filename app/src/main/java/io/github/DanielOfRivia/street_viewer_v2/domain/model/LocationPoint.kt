@@ -6,4 +6,5 @@ data class LocationPoint(
     val longitude: Double,
     val timestampMillis: Long,
     val accuracyMeters: Float,
+    val syncedAtMillis: Long? = null,
 )

@@ -24,10 +24,14 @@ class LocationPointRepositoryImpl @Inject constructor(
         dao.insert(point.toEntity())
     }
 
-    override suspend fun getPage(limit: Int): List<LocationPoint> =
-        dao.getPage(limit).map { it.toDomain() }
+    override suspend fun getUnsyncedPage(limit: Int): List<LocationPoint> =
+        dao.getUnsyncedPage(limit).map { it.toDomain() }
 
-    override suspend fun deleteByIds(ids: List<Long>) {
-        dao.deleteByIds(ids)
+    override suspend fun markSynced(ids: List<Long>, syncedAtMillis: Long) {
+        dao.markSynced(ids, syncedAtMillis)
+    }
+
+    override suspend fun deleteSyncedOlderThan(cutoffMillis: Long) {
+        dao.deleteSyncedOlderThan(cutoffMillis)
     }
 }

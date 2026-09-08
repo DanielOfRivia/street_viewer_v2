@@ -8,6 +8,7 @@ fun LocationPointEntity.toDomain() = LocationPoint(
     longitude = longitude,
     timestampMillis = timestamp,
     accuracyMeters = accuracy,
+    syncedAtMillis = syncedAtMillis,
 )
 
 fun LocationPoint.toEntity() = LocationPointEntity(
@@ -16,4 +17,5 @@ fun LocationPoint.toEntity() = LocationPointEntity(
     longitude = longitude,
     timestamp = timestampMillis,
     accuracy = accuracyMeters,
+    syncedAtMillis = syncedAtMillis,
 )

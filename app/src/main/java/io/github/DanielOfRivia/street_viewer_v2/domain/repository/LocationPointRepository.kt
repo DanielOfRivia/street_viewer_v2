@@ -7,6 +7,7 @@ interface LocationPointRepository {
     fun observePointCount(): Flow<Int>
     fun observeAllPoints(): Flow<List<LocationPoint>>
     suspend fun insert(point: LocationPoint)
-    suspend fun getPage(limit: Int): List<LocationPoint>
-    suspend fun deleteByIds(ids: List<Long>)
+    suspend fun getUnsyncedPage(limit: Int): List<LocationPoint>
+    suspend fun markSynced(ids: List<Long>, syncedAtMillis: Long)
+    suspend fun deleteSyncedOlderThan(cutoffMillis: Long)
 }

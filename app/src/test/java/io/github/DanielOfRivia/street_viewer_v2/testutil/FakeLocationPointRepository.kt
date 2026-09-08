@@ -19,10 +19,14 @@ class FakeLocationPointRepository : LocationPointRepository {
         points.value = points.value + point.copy(id = nextId++)
     }
 
-    override suspend fun getPage(limit: Int): List<LocationPoint> =
-        points.value.sortedBy { it.timestampMillis }.take(limit)
+    override suspend fun getUnsyncedPage(limit: Int): List<LocationPoint> =
+        points.value.filter { it.syncedAtMillis == null }.sortedBy { it.timestampMillis }.take(limit)
 
-    override suspend fun deleteByIds(ids: List<Long>) {
-        points.value = points.value.filterNot { it.id in ids }
+    override suspend fun markSynced(ids: List<Long>, syncedAtMillis: Long) {
+        points.value = points.value.map { if (it.id in ids) it.copy(syncedAtMillis = syncedAtMillis) else it }
+    }
+
+    override suspend fun deleteSyncedOlderThan(cutoffMillis: Long) {
+        points.value = points.value.filterNot { it.syncedAtMillis != null && it.timestampMillis < cutoffMillis }
     }
 }

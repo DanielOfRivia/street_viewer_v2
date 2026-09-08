@@ -96,6 +96,7 @@ fun TrackingRoute(
         },
         onStopClick = { TrackingService.stop(context) },
         onOpenSettingsClick = { context.startActivity(appSettingsIntent(context)) },
+        onSyncClick = viewModel::onSyncClick,
         modifier = modifier,
     )
 }

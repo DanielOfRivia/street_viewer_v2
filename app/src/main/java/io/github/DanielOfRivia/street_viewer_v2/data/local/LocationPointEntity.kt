@@ -1,5 +1,6 @@
 package io.github.DanielOfRivia.street_viewer_v2.data.local
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 
@@ -10,4 +11,5 @@ data class LocationPointEntity(
     val longitude: Double,
     val timestamp: Long,
     val accuracy: Float,
+    @ColumnInfo(defaultValue = "NULL") val syncedAtMillis: Long? = null,
 )

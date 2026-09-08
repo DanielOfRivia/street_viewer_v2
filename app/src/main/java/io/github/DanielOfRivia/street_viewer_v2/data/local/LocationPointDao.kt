@@ -17,9 +17,12 @@ interface LocationPointDao {
     @Query("SELECT * FROM location_points ORDER BY timestamp ASC")
     fun observeAll(): Flow<List<LocationPointEntity>>
 
-    @Query("SELECT * FROM location_points ORDER BY timestamp ASC LIMIT :limit")
-    suspend fun getPage(limit: Int): List<LocationPointEntity>
+    @Query("SELECT * FROM location_points WHERE syncedAtMillis IS NULL ORDER BY timestamp ASC LIMIT :limit")
+    suspend fun getUnsyncedPage(limit: Int): List<LocationPointEntity>
 
-    @Query("DELETE FROM location_points WHERE id IN (:ids)")
-    suspend fun deleteByIds(ids: List<Long>)
+    @Query("UPDATE location_points SET syncedAtMillis = :syncedAtMillis WHERE id IN (:ids)")
+    suspend fun markSynced(ids: List<Long>, syncedAtMillis: Long)
+
+    @Query("DELETE FROM location_points WHERE syncedAtMillis IS NOT NULL AND timestamp < :cutoffMillis")
+    suspend fun deleteSyncedOlderThan(cutoffMillis: Long)
 }

@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -54,25 +55,48 @@ class LocationPointDaoTest {
     }
 
     @Test
-    fun getPageRespectsLimitAndOrdersOldestFirst() = runBlocking {
+    fun getUnsyncedPageRespectsLimitOrdersOldestFirstAndExcludesSyncedRows() = runBlocking {
         repeat(5) { i -> dao.insert(point(timestamp = i.toLong())) }
+        val allIds = dao.observeAll().first().map { it.id }
+        dao.markSynced(listOf(allIds[0]), syncedAtMillis = 999L)
 
-        val page = dao.getPage(limit = 3)
+        val page = dao.getUnsyncedPage(limit = 3)
 
-        assertEquals(listOf(0L, 1L, 2L), page.map { it.timestamp })
+        // timestamp 0 was synced above and is excluded, even though it's oldest
+        assertEquals(listOf(1L, 2L, 3L), page.map { it.timestamp })
     }
 
     @Test
-    fun deleteByIdsRemovesOnlyTheGivenRows() = runBlocking {
+    fun markSyncedUpdatesOnlyTheGivenRows() = runBlocking {
         dao.insert(point(timestamp = 1L))
         dao.insert(point(timestamp = 2L))
         dao.insert(point(timestamp = 3L))
 
-        val idToDelete = dao.observeAll().first().first { it.timestamp == 2L }.id
-        dao.deleteByIds(listOf(idToDelete))
+        val idToMark = dao.observeAll().first().first { it.timestamp == 2L }.id
+        dao.markSynced(listOf(idToMark), syncedAtMillis = 500L)
+
+        val all = dao.observeAll().first()
+        assertEquals(500L, all.first { it.timestamp == 2L }.syncedAtMillis)
+        assertNull(all.first { it.timestamp == 1L }.syncedAtMillis)
+        assertNull(all.first { it.timestamp == 3L }.syncedAtMillis)
+    }
+
+    @Test
+    fun deleteSyncedOlderThanRemovesOnlySyncedRowsPastTheCutoff() = runBlocking {
+        dao.insert(point(timestamp = 100L)) // old, stays unsynced
+        dao.insert(point(timestamp = 200L)) // old, will be synced
+        dao.insert(point(timestamp = 900L)) // recent, will be synced
+
+        val all = dao.observeAll().first()
+        dao.markSynced(listOf(all.first { it.timestamp == 200L }.id), syncedAtMillis = 1L)
+        dao.markSynced(listOf(all.first { it.timestamp == 900L }.id), syncedAtMillis = 1L)
+
+        dao.deleteSyncedOlderThan(cutoffMillis = 500L)
 
         val remaining = dao.observeAll().first()
-        assertEquals(listOf(1L, 3L), remaining.map { it.timestamp })
+        // the old unsynced row survives regardless of age; the old synced row is purged;
+        // the recent synced row survives
+        assertEquals(listOf(100L, 900L), remaining.map { it.timestamp }.sorted())
     }
 
     @Test

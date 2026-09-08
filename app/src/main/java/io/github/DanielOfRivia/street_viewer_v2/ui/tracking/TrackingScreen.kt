@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -17,6 +18,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import io.github.DanielOfRivia.street_viewer_v2.R
+import io.github.DanielOfRivia.street_viewer_v2.domain.model.SyncSchedulerState
 import io.github.DanielOfRivia.street_viewer_v2.domain.model.TrackingStopReason
 import io.github.DanielOfRivia.street_viewer_v2.ui.theme.Street_viewer_v2Theme
 
@@ -26,6 +28,7 @@ fun TrackingScreen(
     onStartClick: () -> Unit,
     onStopClick: () -> Unit,
     onOpenSettingsClick: () -> Unit,
+    onSyncClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -72,6 +75,35 @@ fun TrackingScreen(
                 textAlign = TextAlign.Center,
             )
         }
+
+        Spacer(Modifier.height(24.dp))
+
+        OutlinedButton(onClick = onSyncClick, enabled = uiState.syncState !is SyncSchedulerState.Running) {
+            Text(stringResource(R.string.tracking_upload))
+        }
+
+        val syncStatusText = when (val syncState = uiState.syncState) {
+            SyncSchedulerState.Idle -> null
+            SyncSchedulerState.Running -> stringResource(R.string.tracking_sync_in_progress)
+            is SyncSchedulerState.Succeeded -> if (syncState.uploadedCount == 0) {
+                stringResource(R.string.tracking_sync_nothing_to_upload)
+            } else {
+                stringResource(R.string.tracking_sync_succeeded, syncState.uploadedCount)
+            }
+            is SyncSchedulerState.Failed -> stringResource(
+                R.string.tracking_sync_failed,
+                syncState.uploadedCount,
+                syncState.reason,
+            )
+        }
+        if (syncStatusText != null) {
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = syncStatusText,
+                style = MaterialTheme.typography.bodySmall,
+                textAlign = TextAlign.Center,
+            )
+        }
     }
 }
 
@@ -111,6 +143,7 @@ private fun TrackingScreenIdlePreview() {
             onStartClick = {},
             onStopClick = {},
             onOpenSettingsClick = {},
+            onSyncClick = {},
         )
     }
 }
@@ -128,6 +161,7 @@ private fun TrackingScreenTrackingPreview() {
             onStartClick = {},
             onStopClick = {},
             onOpenSettingsClick = {},
+            onSyncClick = {},
         )
     }
 }
@@ -141,6 +175,7 @@ private fun TrackingScreenPermanentlyDeniedPreview() {
             onStartClick = {},
             onStopClick = {},
             onOpenSettingsClick = {},
+            onSyncClick = {},
         )
     }
 }
@@ -158,6 +193,25 @@ private fun TrackingScreenStoppedWithReasonPreview() {
             onStartClick = {},
             onStopClick = {},
             onOpenSettingsClick = {},
+            onSyncClick = {},
+        )
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+private fun TrackingScreenSyncFailedPreview() {
+    Street_viewer_v2Theme {
+        TrackingScreen(
+            uiState = TrackingUiState(
+                pointCount = 1500,
+                permissionState = LocationPermissionState.Granted,
+                syncState = SyncSchedulerState.Failed(uploadedCount = 1000, reason = "Server returned HTTP 500"),
+            ),
+            onStartClick = {},
+            onStopClick = {},
+            onOpenSettingsClick = {},
+            onSyncClick = {},
         )
     }
 }

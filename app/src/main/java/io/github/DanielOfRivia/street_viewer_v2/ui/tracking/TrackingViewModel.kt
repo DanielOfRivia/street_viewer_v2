@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import io.github.DanielOfRivia.street_viewer_v2.domain.repository.LocationPointRepository
+import io.github.DanielOfRivia.street_viewer_v2.domain.repository.SyncScheduler
 import io.github.DanielOfRivia.street_viewer_v2.domain.repository.TrackingStatusRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -16,6 +17,7 @@ import javax.inject.Inject
 class TrackingViewModel @Inject constructor(
     locationPointRepository: LocationPointRepository,
     trackingStatusRepository: TrackingStatusRepository,
+    private val syncScheduler: SyncScheduler,
 ) : ViewModel() {
 
     private val permissionState = MutableStateFlow(LocationPermissionState.Unknown)
@@ -24,12 +26,14 @@ class TrackingViewModel @Inject constructor(
         locationPointRepository.observePointCount(),
         trackingStatusRepository.status,
         permissionState,
-    ) { pointCount, status, permission ->
+        syncScheduler.state,
+    ) { pointCount, status, permission, syncState ->
         TrackingUiState(
             isTracking = status.isActive,
             pointCount = pointCount,
             stopReason = status.stopReason,
             permissionState = permission,
+            syncState = syncState,
         )
     }.stateIn(
         scope = viewModelScope,
@@ -39,5 +43,9 @@ class TrackingViewModel @Inject constructor(
 
     fun onPermissionStateChanged(state: LocationPermissionState) {
         permissionState.value = state
+    }
+
+    fun onSyncClick() {
+        syncScheduler.requestSync()
     }
 }
