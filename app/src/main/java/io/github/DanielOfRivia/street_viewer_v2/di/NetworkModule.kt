@@ -21,49 +21,44 @@ object NetworkModule {
     @Singleton
     fun provideJson(): Json = Json { ignoreUnknownKeys = true }
 
-    @Provides
-    @Singleton
-    fun provideOkHttpClient(): OkHttpClient {
-        val builder = OkHttpClient.Builder()
+    private fun baseClientBuilder(): OkHttpClient.Builder =
+        OkHttpClient.Builder()
             .connectTimeout(30, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)
             .writeTimeout(30, TimeUnit.SECONDS)
 
-        // Request/response bodies contain the user's movement history -- never log them
-        // in release builds.
+    // Request/response bodies contain the user's movement history -- never log them in
+    // release builds. Must be the LAST interceptor added on any client: OkHttp interceptors
+    // added earlier see the request before ones added later modify it, so logging added
+    // before e.g. the API key interceptor below would never show that header even though
+    // it's genuinely still sent -- it'd just look like it's missing.
+    private fun OkHttpClient.Builder.withDebugLoggingLast(): OkHttpClient.Builder = apply {
         if (BuildConfig.DEBUG) {
-            builder.addInterceptor(
-                HttpLoggingInterceptor().apply { level = HttpLoggingInterceptor.Level.BODY },
-            )
+            addInterceptor(HttpLoggingInterceptor().apply { level = HttpLoggingInterceptor.Level.BODY })
         }
-
-        return builder.build()
     }
 
     @Provides
     @Singleton
-    fun provideRetrofit(okHttpClient: OkHttpClient): Retrofit {
-        // The API key is scoped to this client, not the shared okHttpClient above: that one
-        // is also injected into OverpassClientImpl, and Overpass -- an unrelated public
-        // service -- should never see this backend's key.
+    fun provideOkHttpClient(): OkHttpClient = baseClientBuilder().withDebugLoggingLast().build()
+
+    @Provides
+    @Singleton
+    fun provideRetrofit(): Retrofit {
+        // Built independently from provideOkHttpClient's instance, not derived via
+        // newBuilder(): that client is also injected into OverpassClientImpl, and Overpass --
+        // an unrelated public service -- should never see this backend's key.
         val apiKey = BuildConfig.NGROK_SECURE_API_KEY
-        val backendClient = if (apiKey.isBlank()) {
-            okHttpClient
-        } else {
-            okHttpClient.newBuilder()
-                .addInterceptor { chain ->
-                    chain.proceed(
-                        chain.request().newBuilder()
-                            .addHeader(API_KEY_HEADER, apiKey)
-                            .build(),
-                    )
-                }
-                .build()
+        val builder = baseClientBuilder()
+        if (apiKey.isNotBlank()) {
+            builder.addInterceptor { chain ->
+                chain.proceed(chain.request().newBuilder().addHeader(API_KEY_HEADER, apiKey).build())
+            }
         }
 
         return Retrofit.Builder()
             .baseUrl(BuildConfig.BASE_URL)
-            .client(backendClient)
+            .client(builder.withDebugLoggingLast().build())
             .build()
     }
 
