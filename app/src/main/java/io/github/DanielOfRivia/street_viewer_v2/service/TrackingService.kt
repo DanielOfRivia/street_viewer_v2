@@ -115,6 +115,12 @@ class TrackingService : Service() {
     }
 
     private fun onNewLocation(location: Location) {
+        // A fix this imprecise (weak signal, indoors, urban canyon, GPS still warming up)
+        // would show up on the map as a spurious jump off the actual street rather than
+        // genuine movement. Silently dropped, same as the interval/distance filters above --
+        // there's always a next fix, no need to surface this to the user.
+        if (location.accuracy > MAX_ACCEPTABLE_ACCURACY_METERS) return
+
         serviceScope.launch {
             locationPointRepository.insert(
                 LocationPoint(
@@ -159,6 +165,7 @@ class TrackingService : Service() {
         private const val ACTION_STOP = "io.github.DanielOfRivia.street_viewer_v2.action.STOP"
         private const val UPDATE_INTERVAL_MILLIS = 30_000L
         private const val MIN_UPDATE_DISTANCE_METERS = 10f
+        private const val MAX_ACCEPTABLE_ACCURACY_METERS = 50f
 
         fun start(context: Context) {
             ContextCompat.startForegroundService(context, Intent(context, TrackingService::class.java))
