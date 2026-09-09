@@ -18,6 +18,7 @@ import dagger.hilt.android.AndroidEntryPoint
 import io.github.DanielOfRivia.street_viewer_v2.domain.model.LocationPoint
 import io.github.DanielOfRivia.street_viewer_v2.domain.model.TrackingStopReason
 import io.github.DanielOfRivia.street_viewer_v2.domain.repository.LocationPointRepository
+import io.github.DanielOfRivia.street_viewer_v2.domain.repository.TrackingPreferencesRepository
 import io.github.DanielOfRivia.street_viewer_v2.domain.repository.TrackingStatusRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -32,6 +33,7 @@ class TrackingService : Service() {
     @Inject lateinit var fusedLocationClient: FusedLocationProviderClient
     @Inject lateinit var locationPointRepository: LocationPointRepository
     @Inject lateinit var trackingStatusRepository: TrackingStatusRepository
+    @Inject lateinit var trackingPreferencesRepository: TrackingPreferencesRepository
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val locationRequest = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, UPDATE_INTERVAL_MILLIS)
@@ -74,6 +76,11 @@ class TrackingService : Service() {
 
     private fun startTracking() {
         if (isTracking) return
+
+        // Persists the user's intent, not whether this attempt actually succeeds: a resume
+        // attempt (boot, sticky restart) should keep retrying on future occasions even if
+        // this particular attempt fails below, e.g. because permission is still missing.
+        serviceScope.launch { trackingPreferencesRepository.setTrackingRequested(true) }
 
         if (!hasLocationPermission()) {
             stopTracking(TrackingStopReason.PERMISSION_MISSING)
@@ -128,6 +135,12 @@ class TrackingService : Service() {
         isTracking = false
         sessionPointCount = 0
         trackingStatusRepository.reportStopped(reason)
+        // Only an explicit user stop clears the "resume on reboot" intent. A failure-driven
+        // stop (permission revoked, start-foreground rejected, ...) means tracking should
+        // still come back once the obstacle is gone -- it wasn't the user asking for it off.
+        if (reason == TrackingStopReason.USER_REQUESTED) {
+            serviceScope.launch { trackingPreferencesRepository.setTrackingRequested(false) }
+        }
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
     }

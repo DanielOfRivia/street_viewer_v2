@@ -6,6 +6,7 @@ import io.github.DanielOfRivia.street_viewer_v2.domain.model.TrackingStopReason
 import io.github.DanielOfRivia.street_viewer_v2.domain.model.SyncSchedulerState
 import io.github.DanielOfRivia.street_viewer_v2.testutil.FakeLocationPointRepository
 import io.github.DanielOfRivia.street_viewer_v2.testutil.FakeSyncScheduler
+import io.github.DanielOfRivia.street_viewer_v2.testutil.FakeTrackingPreferencesRepository
 import io.github.DanielOfRivia.street_viewer_v2.testutil.FakeTrackingStatusRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -27,6 +28,7 @@ class TrackingViewModelTest {
     private val dispatcher = StandardTestDispatcher()
     private lateinit var locationPointRepository: FakeLocationPointRepository
     private lateinit var trackingStatusRepository: FakeTrackingStatusRepository
+    private lateinit var trackingPreferencesRepository: FakeTrackingPreferencesRepository
     private lateinit var syncScheduler: FakeSyncScheduler
     private lateinit var viewModel: TrackingViewModel
 
@@ -35,8 +37,14 @@ class TrackingViewModelTest {
         Dispatchers.setMain(dispatcher)
         locationPointRepository = FakeLocationPointRepository()
         trackingStatusRepository = FakeTrackingStatusRepository()
+        trackingPreferencesRepository = FakeTrackingPreferencesRepository()
         syncScheduler = FakeSyncScheduler()
-        viewModel = TrackingViewModel(locationPointRepository, trackingStatusRepository, syncScheduler)
+        viewModel = TrackingViewModel(
+            locationPointRepository,
+            trackingStatusRepository,
+            trackingPreferencesRepository,
+            syncScheduler,
+        )
     }
 
     @After
@@ -110,6 +118,26 @@ class TrackingViewModelTest {
         viewModel.onSyncClick()
 
         assertEquals(1, syncScheduler.requestSyncCallCount)
+    }
+
+    @Test
+    fun shouldAutoResumeIsFalseWhenTrackingWasNeverRequested() = runTest(dispatcher) {
+        assertFalse(viewModel.shouldAutoResumeTracking())
+    }
+
+    @Test
+    fun shouldAutoResumeIsTrueWhenRequestedButNotCurrentlyActive() = runTest(dispatcher) {
+        trackingPreferencesRepository.setTrackingRequested(true)
+
+        assertTrue(viewModel.shouldAutoResumeTracking())
+    }
+
+    @Test
+    fun shouldAutoResumeIsFalseWhenAlreadyActive() = runTest(dispatcher) {
+        trackingPreferencesRepository.setTrackingRequested(true)
+        trackingStatusRepository.reportStarted()
+
+        assertFalse(viewModel.shouldAutoResumeTracking())
     }
 
     private fun samplePoint() = LocationPoint(

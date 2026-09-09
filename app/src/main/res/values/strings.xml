@@ -27,4 +27,8 @@
     <string name="tracking_sync_nothing_to_upload">Nothing to upload</string>
     <string name="tracking_sync_succeeded">Uploaded %1$d points</string>
     <string name="tracking_sync_failed">Uploaded %1$d, then failed: %2$s</string>
+
+    <string name="resume_tracking_notification_channel_name">Resume tracking</string>
+    <string name="resume_tracking_notification_title">Tracking didn\'t resume</string>
+    <string name="resume_tracking_notification_text">Tap to resume tracking your route.</string>
 </resources>

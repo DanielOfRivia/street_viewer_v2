@@ -4,6 +4,7 @@ import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
+import io.github.DanielOfRivia.street_viewer_v2.data.repository.DataStoreTrackingPreferencesRepository
 import io.github.DanielOfRivia.street_viewer_v2.data.repository.LocationPointRepositoryImpl
 import io.github.DanielOfRivia.street_viewer_v2.data.repository.SyncRepositoryImpl
 import io.github.DanielOfRivia.street_viewer_v2.data.repository.TrackingStatusRepositoryImpl
@@ -11,6 +12,7 @@ import io.github.DanielOfRivia.street_viewer_v2.data.repository.WorkManagerSyncS
 import io.github.DanielOfRivia.street_viewer_v2.domain.repository.LocationPointRepository
 import io.github.DanielOfRivia.street_viewer_v2.domain.repository.SyncRepository
 import io.github.DanielOfRivia.street_viewer_v2.domain.repository.SyncScheduler
+import io.github.DanielOfRivia.street_viewer_v2.domain.repository.TrackingPreferencesRepository
 import io.github.DanielOfRivia.street_viewer_v2.domain.repository.TrackingStatusRepository
 import javax.inject.Singleton
 
@@ -41,4 +43,10 @@ abstract class RepositoryModule {
     abstract fun bindSyncScheduler(
         impl: WorkManagerSyncScheduler,
     ): SyncScheduler
+
+    @Binds
+    @Singleton
+    abstract fun bindTrackingPreferencesRepository(
+        impl: DataStoreTrackingPreferencesRepository,
+    ): TrackingPreferencesRepository
 }

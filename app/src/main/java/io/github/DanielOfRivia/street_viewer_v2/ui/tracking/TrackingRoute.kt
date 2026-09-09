@@ -72,7 +72,16 @@ fun TrackingRoute(
         }
     }
 
-    LaunchedEffect(Unit) { refreshPermissionState() }
+    LaunchedEffect(Unit) {
+        refreshPermissionState()
+        // Only auto-resumes when permission is already granted -- deliberately doesn't pop
+        // a permission request on a bare app open, which would be surprising if the user
+        // opened the app for an unrelated reason. If permission was lost, the screen just
+        // shows its normal Start button for the user to tap through the request flow.
+        if (context.hasLocationPermission() && viewModel.shouldAutoResumeTracking()) {
+            requestNotificationPermissionThenStart(context, notificationPermissionLauncher)
+        }
+    }
 
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
