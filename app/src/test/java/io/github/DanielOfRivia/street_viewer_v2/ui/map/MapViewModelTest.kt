@@ -2,7 +2,9 @@ package io.github.DanielOfRivia.street_viewer_v2.ui.map
 
 import app.cash.turbine.test
 import io.github.DanielOfRivia.street_viewer_v2.domain.model.LocationPoint
+import io.github.DanielOfRivia.street_viewer_v2.domain.model.VisitedStreetRun
 import io.github.DanielOfRivia.street_viewer_v2.testutil.FakeLocationPointRepository
+import io.github.DanielOfRivia.street_viewer_v2.testutil.FakeStreetCoverageRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -21,13 +23,15 @@ class MapViewModelTest {
 
     private val dispatcher = StandardTestDispatcher()
     private lateinit var locationPointRepository: FakeLocationPointRepository
+    private lateinit var streetCoverageRepository: FakeStreetCoverageRepository
     private lateinit var viewModel: MapViewModel
 
     @Before
     fun setUp() {
         Dispatchers.setMain(dispatcher)
         locationPointRepository = FakeLocationPointRepository()
-        viewModel = MapViewModel(locationPointRepository)
+        streetCoverageRepository = FakeStreetCoverageRepository()
+        viewModel = MapViewModel(locationPointRepository, streetCoverageRepository)
     }
 
     @After
@@ -67,6 +71,20 @@ class MapViewModelTest {
 
             locationPointRepository.insert(point(timestampMillis = 2L))
             assertEquals(2, awaitItem().points.size)
+        }
+    }
+
+    @Test
+    fun visitedStreetRunsComeFromTheStreetCoverageRepository() = runTest(dispatcher) {
+        streetCoverageRepository.visitedStreetRuns = listOf(
+            VisitedStreetRun(points = emptyList()),
+        )
+
+        viewModel.uiState.test {
+            awaitItem()
+
+            locationPointRepository.insert(point(timestampMillis = 1L))
+            assertEquals(1, awaitItem().visitedStreetRuns.size)
         }
     }
 

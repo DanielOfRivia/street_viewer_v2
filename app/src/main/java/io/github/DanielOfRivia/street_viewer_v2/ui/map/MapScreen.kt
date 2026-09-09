@@ -14,6 +14,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -28,10 +29,13 @@ import com.google.maps.android.compose.MarkerState
 import com.google.maps.android.compose.Polyline
 import com.google.maps.android.compose.rememberCameraPositionState
 import io.github.DanielOfRivia.street_viewer_v2.R
+import io.github.DanielOfRivia.street_viewer_v2.domain.model.LatLon
 import io.github.DanielOfRivia.street_viewer_v2.domain.model.LocationPoint
+import io.github.DanielOfRivia.street_viewer_v2.domain.model.VisitedStreetRun
 import io.github.DanielOfRivia.street_viewer_v2.ui.theme.Street_viewer_v2Theme
 
 private const val DEFAULT_ZOOM = 15f
+private val VisitedStreetColor = Color(0xFF00C853)
 
 @Composable
 fun MapRoute(
@@ -76,6 +80,13 @@ fun MapScreen(
         cameraPositionState = cameraPositionState,
     ) {
         Polyline(points = uiState.points.map { it.toLatLng() })
+        uiState.visitedStreetRuns.forEach { run ->
+            Polyline(
+                points = run.points.map { it.toLatLng() },
+                color = VisitedStreetColor,
+                width = 12f,
+            )
+        }
         Marker(
             state = MarkerState(position = newest.toLatLng()),
             title = stringResource(R.string.map_newest_position_marker_title),
@@ -96,6 +107,7 @@ private fun EmptyMapState(modifier: Modifier = Modifier) {
 }
 
 private fun LocationPoint.toLatLng() = LatLng(latitude, longitude)
+private fun LatLon.toLatLng() = LatLng(latitude, longitude)
 
 @Preview(showBackground = true)
 @Composable
@@ -115,6 +127,14 @@ private fun MapScreenWithTrackPreview() {
                     LocationPoint(id = 1, latitude = 43.6532, longitude = -79.3832, timestampMillis = 0L, accuracyMeters = 8f),
                     LocationPoint(id = 2, latitude = 43.6540, longitude = -79.3820, timestampMillis = 30_000L, accuracyMeters = 6f),
                     LocationPoint(id = 3, latitude = 43.6548, longitude = -79.3805, timestampMillis = 60_000L, accuracyMeters = 7f),
+                ),
+                visitedStreetRuns = listOf(
+                    VisitedStreetRun(
+                        points = listOf(
+                            LatLon(43.6531, -79.3833),
+                            LatLon(43.6541, -79.3819),
+                        ),
+                    ),
                 ),
             ),
         )
