@@ -11,6 +11,7 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import java.net.URLEncoder
 import javax.inject.Inject
 
 class OverpassClientImpl @Inject constructor(
@@ -25,9 +26,15 @@ class OverpassClientImpl @Inject constructor(
             // fair-use throttling, malformed response) just means no colored streets for this
             // session rather than a crash -- the raw track and everything else still works.
             try {
+                val formBody = "data=" + URLEncoder.encode(buildQuery(bounds), "UTF-8")
                 val request = Request.Builder()
                     .url(baseUrl)
-                    .post(buildQuery(bounds).toRequestBody("text/plain".toMediaType()))
+                    // Overpass's documented usage: the query goes as a "data" form field, not
+                    // a raw body -- sending it as raw text/plain gets a 406 from Apache's
+                    // content negotiation. A descriptive User-Agent is also documented as
+                    // expected (fair-use identification), separate from OkHttp's default one.
+                    .header("User-Agent", "street_viewer_v2 (personal GPS tracker, Android)")
+                    .post(formBody.toRequestBody("application/x-www-form-urlencoded".toMediaType()))
                     .build()
 
                 okHttpClient.newCall(request).execute().use { response ->

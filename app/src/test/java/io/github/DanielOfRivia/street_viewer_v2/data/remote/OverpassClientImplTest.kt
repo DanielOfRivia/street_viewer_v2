@@ -51,9 +51,16 @@ class OverpassClientImplTest {
         assertEquals(listOf(listOf(LatLon(43.65, -79.38), LatLon(43.66, -79.37))), ways)
         val recorded = server.takeRequest()
         assertEquals("POST", recorded.method)
+        // Overpass's documented format: the query is a "data" form field, not a raw body --
+        // sending it as raw text gets a real 406 from Apache's content negotiation (confirmed
+        // on-device against the real API; MockWebServer alone wouldn't have caught this since
+        // it accepts any body/content-type unlike the real server).
+        assertEquals("application/x-www-form-urlencoded", recorded.headers["Content-Type"]?.substringBefore(";"))
         val body = recorded.body?.utf8().orEmpty()
+        assertTrue(body.startsWith("data="))
         assertTrue(body.contains("43.6") && body.contains("-79.4") && body.contains("43.7") && body.contains("-79.3"))
         assertTrue(body.contains("highway"))
+        assertTrue(recorded.headers["User-Agent"]?.contains("street_viewer_v2") == true)
     }
 
     @Test
