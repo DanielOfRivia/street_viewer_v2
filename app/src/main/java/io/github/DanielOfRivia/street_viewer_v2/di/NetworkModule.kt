@@ -37,19 +37,35 @@ object NetworkModule {
             )
         }
 
-        // TODO: once the backend requires auth, add a single Authorization-header
-        // Interceptor here -- this is the one place a token gets attached for every request.
-
         return builder.build()
     }
 
     @Provides
     @Singleton
-    fun provideRetrofit(okHttpClient: OkHttpClient): Retrofit =
-        Retrofit.Builder()
+    fun provideRetrofit(okHttpClient: OkHttpClient): Retrofit {
+        // The API key is scoped to this client, not the shared okHttpClient above: that one
+        // is also injected into OverpassClientImpl, and Overpass -- an unrelated public
+        // service -- should never see this backend's key.
+        val apiKey = BuildConfig.NGROK_SECURE_API_KEY
+        val backendClient = if (apiKey.isBlank()) {
+            okHttpClient
+        } else {
+            okHttpClient.newBuilder()
+                .addInterceptor { chain ->
+                    chain.proceed(
+                        chain.request().newBuilder()
+                            .addHeader(API_KEY_HEADER, apiKey)
+                            .build(),
+                    )
+                }
+                .build()
+        }
+
+        return Retrofit.Builder()
             .baseUrl(BuildConfig.BASE_URL)
-            .client(okHttpClient)
+            .client(backendClient)
             .build()
+    }
 
     @Provides
     @Singleton
@@ -62,4 +78,10 @@ object NetworkModule {
     @Provides
     @RetentionWindowMillis
     fun provideRetentionWindowMillis(): Long = TimeUnit.DAYS.toMillis(30)
+
+    @Provides
+    @OverpassBaseUrl
+    fun provideOverpassBaseUrl(): String = "https://overpass-api.de/api/interpreter"
+
+    private const val API_KEY_HEADER = "X-API-Key"
 }

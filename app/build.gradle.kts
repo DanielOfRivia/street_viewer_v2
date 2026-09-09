@@ -43,6 +43,15 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         manifestPlaceholders["MAPS_API_KEY"] = localProperties.getProperty("MAPS_API_KEY", "")
+
+        // Same key regardless of build type (there's no separate release backend yet, per
+        // BASE_URL_RELEASE's deliberate .invalid default) -- empty by default so the header
+        // is simply omitted for anyone without a local.properties entry for it.
+        buildConfigField(
+            "String",
+            "NGROK_SECURE_API_KEY",
+            "\"${localProperties.getProperty("NGROK_SECURE_API_KEY", "")}\"",
+        )
     }
 
     buildTypes {
