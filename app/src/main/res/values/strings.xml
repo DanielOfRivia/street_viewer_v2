@@ -27,6 +27,9 @@
     <string name="map_date_picker_confirm">OK</string>
     <string name="map_date_picker_cancel">Cancel</string>
     <string name="map_history_load_failed">Couldn\'t load this day: %1$s</string>
+    <string name="map_previous_day">Previous day</string>
+    <string name="map_next_day">Next day</string>
+    <string name="map_visited_place_default_title">Visited place</string>
 
     <string name="tracking_upload">Upload</string>
     <string name="tracking_sync_in_progress">Uploading…</string>

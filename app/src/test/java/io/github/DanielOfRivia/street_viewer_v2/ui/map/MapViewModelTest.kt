@@ -3,10 +3,12 @@ package io.github.DanielOfRivia.street_viewer_v2.ui.map
 import app.cash.turbine.test
 import io.github.DanielOfRivia.street_viewer_v2.domain.model.LocationHistoryResult
 import io.github.DanielOfRivia.street_viewer_v2.domain.model.LocationPoint
+import io.github.DanielOfRivia.street_viewer_v2.domain.model.VisitedPlace
 import io.github.DanielOfRivia.street_viewer_v2.domain.model.VisitedStreetRun
 import io.github.DanielOfRivia.street_viewer_v2.testutil.FakeLocationHistoryRepository
 import io.github.DanielOfRivia.street_viewer_v2.testutil.FakeLocationPointRepository
 import io.github.DanielOfRivia.street_viewer_v2.testutil.FakeStreetCoverageRepository
+import io.github.DanielOfRivia.street_viewer_v2.testutil.FakeVisitedPlacesRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -29,6 +31,7 @@ class MapViewModelTest {
     private lateinit var locationPointRepository: FakeLocationPointRepository
     private lateinit var streetCoverageRepository: FakeStreetCoverageRepository
     private lateinit var locationHistoryRepository: FakeLocationHistoryRepository
+    private lateinit var visitedPlacesRepository: FakeVisitedPlacesRepository
     private lateinit var viewModel: MapViewModel
 
     @Before
@@ -37,7 +40,13 @@ class MapViewModelTest {
         locationPointRepository = FakeLocationPointRepository()
         streetCoverageRepository = FakeStreetCoverageRepository()
         locationHistoryRepository = FakeLocationHistoryRepository()
-        viewModel = MapViewModel(locationPointRepository, streetCoverageRepository, locationHistoryRepository)
+        visitedPlacesRepository = FakeVisitedPlacesRepository()
+        viewModel = MapViewModel(
+            locationPointRepository,
+            streetCoverageRepository,
+            locationHistoryRepository,
+            visitedPlacesRepository,
+        )
     }
 
     @After
@@ -177,6 +186,77 @@ class MapViewModelTest {
         assertEquals(date.atStartOfDay(zone).toInstant().toEpochMilli(), start)
         assertEquals(date.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli() - 1, end)
     }
+
+    @Test
+    fun visitedPlacesAreFetchedOnInitialLoadForToday() = runTest(dispatcher) {
+        val place = visitedPlace(id = 1)
+        // The init-triggered fetch has no real suspension point in these fakes, so it runs
+        // eagerly to completion as soon as the ViewModel is constructed -- the fake's data
+        // must be set up first, which means the shared `viewModel` from setUp() (built before
+        // this test body runs) is already too late; build a fresh instance here instead.
+        visitedPlacesRepository.places = listOf(place)
+        val freshViewModel = MapViewModel(
+            locationPointRepository,
+            streetCoverageRepository,
+            locationHistoryRepository,
+            visitedPlacesRepository,
+        )
+
+        freshViewModel.uiState.test {
+            // First item is stateIn's seed initialValue, emitted before the combine flow
+            // (started lazily on this very subscription) has produced anything real.
+            awaitItem()
+            dispatcher.scheduler.advanceUntilIdle()
+            assertEquals(listOf(place), expectMostRecentItem().visitedPlaces)
+        }
+    }
+
+    @Test
+    fun selectingADateFetchesVisitedPlacesForThatSameDayRange() = runTest(dispatcher) {
+        val date = LocalDate.now().minusDays(5)
+
+        viewModel.uiState.test {
+            awaitItem()
+            viewModel.onDateSelected(date)
+            dispatcher.scheduler.advanceUntilIdle()
+            expectMostRecentItem()
+        }
+
+        val (start, end) = requireNotNull(visitedPlacesRepository.lastRequestedRange)
+        val zone = java.time.ZoneId.systemDefault()
+        assertEquals(date.atStartOfDay(zone).toInstant().toEpochMilli(), start)
+        assertEquals(date.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli() - 1, end)
+    }
+
+    @Test
+    fun switchingDatesReplacesVisitedPlacesRatherThanAccumulating() = runTest(dispatcher) {
+        viewModel.uiState.test {
+            awaitItem()
+
+            visitedPlacesRepository.places = listOf(visitedPlace(id = 1))
+            viewModel.onDateSelected(LocalDate.now().minusDays(1))
+            dispatcher.scheduler.advanceUntilIdle()
+            assertEquals(1, expectMostRecentItem().visitedPlaces.size)
+
+            visitedPlacesRepository.places = listOf(visitedPlace(id = 2), visitedPlace(id = 3))
+            viewModel.onDateSelected(LocalDate.now().minusDays(2))
+            dispatcher.scheduler.advanceUntilIdle()
+            val places = expectMostRecentItem().visitedPlaces
+            assertEquals(2, places.size)
+            assertEquals(setOf(2L, 3L), places.map { it.id }.toSet())
+        }
+    }
+
+    private fun visitedPlace(id: Long) = VisitedPlace(
+        id = id,
+        latitude = 43.6532,
+        longitude = -79.3832,
+        arrivalTimeMillis = 0L,
+        departureTimeMillis = 1_000L,
+        pointCount = 5,
+        address = null,
+        businesses = emptyList(),
+    )
 
     private fun point(timestampMillis: Long) = LocationPoint(
         latitude = 43.6532,

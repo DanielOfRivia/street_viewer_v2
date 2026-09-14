@@ -12,6 +12,7 @@ import io.github.DanielOfRivia.street_viewer_v2.data.repository.LocationPointRep
 import io.github.DanielOfRivia.street_viewer_v2.data.repository.StreetCoverageRepositoryImpl
 import io.github.DanielOfRivia.street_viewer_v2.data.repository.SyncRepositoryImpl
 import io.github.DanielOfRivia.street_viewer_v2.data.repository.TrackingStatusRepositoryImpl
+import io.github.DanielOfRivia.street_viewer_v2.data.repository.VisitedPlacesRepositoryImpl
 import io.github.DanielOfRivia.street_viewer_v2.data.repository.WorkManagerSyncScheduler
 import io.github.DanielOfRivia.street_viewer_v2.domain.repository.LocationHistoryRepository
 import io.github.DanielOfRivia.street_viewer_v2.domain.repository.LocationPointRepository
@@ -20,6 +21,7 @@ import io.github.DanielOfRivia.street_viewer_v2.domain.repository.SyncRepository
 import io.github.DanielOfRivia.street_viewer_v2.domain.repository.SyncScheduler
 import io.github.DanielOfRivia.street_viewer_v2.domain.repository.TrackingPreferencesRepository
 import io.github.DanielOfRivia.street_viewer_v2.domain.repository.TrackingStatusRepository
+import io.github.DanielOfRivia.street_viewer_v2.domain.repository.VisitedPlacesRepository
 import javax.inject.Singleton
 
 @Module
@@ -73,4 +75,10 @@ abstract class RepositoryModule {
     abstract fun bindLocationHistoryRepository(
         impl: LocationHistoryRepositoryImpl,
     ): LocationHistoryRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindVisitedPlacesRepository(
+        impl: VisitedPlacesRepositoryImpl,
+    ): VisitedPlacesRepository
 }

@@ -25,4 +25,10 @@ interface LocationApi {
         @Query("start") startMillis: Long,
         @Query("end") endMillis: Long,
     ): Response<ResponseBody>
+
+    @GET("api/v1/visited-places")
+    suspend fun getVisitedPlaces(
+        @Query("start") startMillis: Long,
+        @Query("end") endMillis: Long,
+    ): Response<ResponseBody>
 }

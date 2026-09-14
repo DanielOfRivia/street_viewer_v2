@@ -1,5 +1,9 @@
 package io.github.DanielOfRivia.street_viewer_v2.ui.map
 
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Paint
+import android.graphics.Path
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -9,10 +13,15 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SelectableDates
 import androidx.compose.material3.Surface
@@ -27,7 +36,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
@@ -35,6 +46,8 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.google.android.gms.maps.CameraUpdateFactory
+import com.google.android.gms.maps.model.BitmapDescriptor
+import com.google.android.gms.maps.model.BitmapDescriptorFactory
 import com.google.android.gms.maps.model.CameraPosition
 import com.google.android.gms.maps.model.LatLng
 import com.google.maps.android.compose.GoogleMap
@@ -43,16 +56,20 @@ import com.google.maps.android.compose.MarkerState
 import com.google.maps.android.compose.Polyline
 import com.google.maps.android.compose.rememberCameraPositionState
 import io.github.DanielOfRivia.street_viewer_v2.R
+import io.github.DanielOfRivia.street_viewer_v2.domain.GeoMath
 import io.github.DanielOfRivia.street_viewer_v2.domain.model.LatLon
 import io.github.DanielOfRivia.street_viewer_v2.domain.model.LocationPoint
+import io.github.DanielOfRivia.street_viewer_v2.domain.model.VisitedPlace
 import io.github.DanielOfRivia.street_viewer_v2.domain.model.VisitedStreetRun
 import io.github.DanielOfRivia.street_viewer_v2.ui.theme.Street_viewer_v2Theme
 import java.time.Instant
 import java.time.LocalDate
+import java.time.ZoneId
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 
 private const val DEFAULT_ZOOM = 15f
+private const val ARROW_POINT_INTERVAL = 5
 private val VisitedStreetColor = Color(0xFF00C853)
 
 @Composable
@@ -128,6 +145,9 @@ private fun TrackMap(uiState: MapUiState, modifier: Modifier = Modifier) {
         }
     }
 
+    val arrowIcon = rememberArrowIcon()
+    val defaultPlaceTitle = stringResource(R.string.map_visited_place_default_title)
+
     GoogleMap(
         modifier = modifier,
         cameraPositionState = cameraPositionState,
@@ -140,11 +160,74 @@ private fun TrackMap(uiState: MapUiState, modifier: Modifier = Modifier) {
                 width = 12f,
             )
         }
+
+        for (i in uiState.points.indices) {
+            if (i % ARROW_POINT_INTERVAL != 0 || i >= uiState.points.size - 1) continue
+            val current = uiState.points[i]
+            val next = uiState.points[i + 1]
+            Marker(
+                state = MarkerState(position = current.toLatLng()),
+                icon = arrowIcon,
+                anchor = Offset(0.5f, 0.5f),
+                flat = true,
+                rotation = GeoMath.bearingDegrees(
+                    current.latitude,
+                    current.longitude,
+                    next.latitude,
+                    next.longitude,
+                ).toFloat(),
+                onClick = { true },
+            )
+        }
+
+        uiState.visitedPlaces.forEach { place ->
+            Marker(
+                state = MarkerState(position = LatLng(place.latitude, place.longitude)),
+                title = place.businesses.firstOrNull()?.name ?: place.address ?: defaultPlaceTitle,
+                snippet = formatVisitTimeRange(place.arrivalTimeMillis, place.departureTimeMillis),
+                icon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_ORANGE),
+            )
+        }
+
         Marker(
             state = MarkerState(position = newest.toLatLng()),
             title = stringResource(R.string.map_newest_position_marker_title),
         )
     }
+}
+
+@Composable
+private fun rememberArrowIcon(): BitmapDescriptor {
+    val colorArgb = MaterialTheme.colorScheme.onSurface.toArgb()
+    return remember(colorArgb) {
+        val sizePx = 36
+        val bitmap = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+        val paint = Paint().apply {
+            color = colorArgb
+            style = Paint.Style.FILL
+            isAntiAlias = true
+        }
+        // A chevron/arrowhead pointing up (bearing 0 = north), rotated per-marker via
+        // Marker's own rotation param to match the direction of travel to the next point.
+        val path = Path().apply {
+            moveTo(sizePx / 2f, 0f)
+            lineTo(sizePx.toFloat(), sizePx.toFloat())
+            lineTo(sizePx / 2f, sizePx * 0.7f)
+            lineTo(0f, sizePx.toFloat())
+            close()
+        }
+        canvas.drawPath(path, paint)
+        BitmapDescriptorFactory.fromBitmap(bitmap)
+    }
+}
+
+private fun formatVisitTimeRange(arrivalMillis: Long, departureMillis: Long): String {
+    val formatter = DateTimeFormatter.ofPattern("h:mm a")
+    val zone = ZoneId.systemDefault()
+    val arrival = Instant.ofEpochMilli(arrivalMillis).atZone(zone).format(formatter)
+    val departure = Instant.ofEpochMilli(departureMillis).atZone(zone).format(formatter)
+    return "$arrival – $departure"
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -157,22 +240,39 @@ private fun DateSelectorBar(
 ) {
     var showPicker by remember { mutableStateOf(false) }
 
-    Surface(
-        modifier = modifier,
-        shape = MaterialTheme.shapes.medium,
-        shadowElevation = 4.dp,
-    ) {
-        val todayLabel = stringResource(R.string.map_date_today)
-        Row(
-            modifier = Modifier
-                .clickable { showPicker = true }
-                .padding(horizontal = 16.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(text = selectedDate.toDisplayLabel(todayLabel), style = MaterialTheme.typography.bodyMedium)
-            if (isLoading) {
-                Spacer(Modifier.width(8.dp))
-                CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+    Row(modifier = modifier, verticalAlignment = Alignment.CenterVertically) {
+        Surface(shape = MaterialTheme.shapes.medium, shadowElevation = 4.dp) {
+            IconButton(onClick = { onDateSelected(selectedDate.minusDays(1)) }) {
+                Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = stringResource(R.string.map_previous_day))
+            }
+        }
+
+        Spacer(Modifier.width(8.dp))
+
+        Surface(shape = MaterialTheme.shapes.medium, shadowElevation = 4.dp) {
+            val todayLabel = stringResource(R.string.map_date_today)
+            Row(
+                modifier = Modifier
+                    .clickable { showPicker = true }
+                    .padding(horizontal = 16.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(text = selectedDate.toDisplayLabel(todayLabel), style = MaterialTheme.typography.bodyMedium)
+                if (isLoading) {
+                    Spacer(Modifier.width(8.dp))
+                    CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                }
+            }
+        }
+
+        Spacer(Modifier.width(8.dp))
+
+        Surface(shape = MaterialTheme.shapes.medium, shadowElevation = 4.dp) {
+            IconButton(
+                onClick = { onDateSelected(selectedDate.plusDays(1)) },
+                enabled = selectedDate.isBefore(LocalDate.now()),
+            ) {
+                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = stringResource(R.string.map_next_day))
             }
         }
     }
@@ -259,6 +359,18 @@ private fun MapScreenWithTrackPreview() {
                             LatLon(43.6531, -79.3833),
                             LatLon(43.6541, -79.3819),
                         ),
+                    ),
+                ),
+                visitedPlaces = listOf(
+                    VisitedPlace(
+                        id = 1,
+                        latitude = 43.6536,
+                        longitude = -79.3826,
+                        arrivalTimeMillis = 0L,
+                        departureTimeMillis = 1_800_000L,
+                        pointCount = 12,
+                        address = "123 Main St",
+                        businesses = emptyList(),
                     ),
                 ),
             ),

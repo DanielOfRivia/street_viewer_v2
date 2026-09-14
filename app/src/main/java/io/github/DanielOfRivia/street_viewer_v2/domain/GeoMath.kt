@@ -1,6 +1,8 @@
 package io.github.DanielOfRivia.street_viewer_v2.domain
 
+import kotlin.math.atan2
 import kotlin.math.cos
+import kotlin.math.sin
 import kotlin.math.sqrt
 
 /**
@@ -10,6 +12,26 @@ import kotlin.math.sqrt
  */
 object GeoMath {
     private const val METERS_PER_DEGREE_LATITUDE = 111_320.0
+
+    /** Straight-line distance between two points, using the same small-scale approximation. */
+    fun distanceMeters(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
+        val metersPerDegreeLongitude = METERS_PER_DEGREE_LATITUDE * cos(Math.toRadians((lat1 + lat2) / 2))
+        val dx = (lon2 - lon1) * metersPerDegreeLongitude
+        val dy = (lat2 - lat1) * METERS_PER_DEGREE_LATITUDE
+        return sqrt(dx * dx + dy * dy)
+    }
+
+    /** Initial great-circle bearing from point 1 to point 2, in degrees, 0 = north, clockwise. */
+    fun bearingDegrees(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
+        val lat1Rad = Math.toRadians(lat1)
+        val lat2Rad = Math.toRadians(lat2)
+        val dLonRad = Math.toRadians(lon2 - lon1)
+
+        val y = sin(dLonRad) * cos(lat2Rad)
+        val x = cos(lat1Rad) * sin(lat2Rad) - sin(lat1Rad) * cos(lat2Rad) * cos(dLonRad)
+        val bearing = Math.toDegrees(atan2(y, x))
+        return (bearing + 360.0) % 360.0
+    }
 
     fun distanceToSegmentMeters(
         pointLat: Double,

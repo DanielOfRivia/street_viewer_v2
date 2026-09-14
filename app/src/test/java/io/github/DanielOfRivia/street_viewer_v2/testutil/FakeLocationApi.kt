@@ -17,6 +17,10 @@ class FakeLocationApi : LocationApi {
         Response.success("[]".toResponseBody())
     }
 
+    var getVisitedPlacesResponseProvider: (Long, Long) -> Response<ResponseBody> = { _, _ ->
+        Response.success("[]".toResponseBody())
+    }
+
     override suspend fun uploadLocations(body: RequestBody): Response<Void> {
         callCount++
         onUpload(callCount)
@@ -25,4 +29,7 @@ class FakeLocationApi : LocationApi {
 
     override suspend fun getLocations(startMillis: Long, endMillis: Long): Response<ResponseBody> =
         getLocationsResponseProvider(startMillis, endMillis)
+
+    override suspend fun getVisitedPlaces(startMillis: Long, endMillis: Long): Response<ResponseBody> =
+        getVisitedPlacesResponseProvider(startMillis, endMillis)
 }
