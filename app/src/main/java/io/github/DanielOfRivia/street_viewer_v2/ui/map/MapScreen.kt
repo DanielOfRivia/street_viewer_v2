@@ -57,6 +57,7 @@ import com.google.maps.android.compose.Polyline
 import com.google.maps.android.compose.rememberCameraPositionState
 import io.github.DanielOfRivia.street_viewer_v2.R
 import io.github.DanielOfRivia.street_viewer_v2.domain.GeoMath
+import io.github.DanielOfRivia.street_viewer_v2.domain.MovementSegmenter
 import io.github.DanielOfRivia.street_viewer_v2.domain.model.LatLon
 import io.github.DanielOfRivia.street_viewer_v2.domain.model.LocationPoint
 import io.github.DanielOfRivia.street_viewer_v2.domain.model.VisitedPlace
@@ -149,11 +150,19 @@ private fun TrackMap(uiState: MapUiState, modifier: Modifier = Modifier) {
     val arrowIcon = rememberArrowIcon()
     val defaultPlaceTitle = stringResource(R.string.map_visited_place_default_title)
 
+    // Points recorded while parked at a visited place are just GPS jitter around one spot, not
+    // real movement -- only draw the line (and its direction arrows) for the runs in between.
+    val movementSegments = remember(uiState.points, uiState.visitedPlaces) {
+        MovementSegmenter.segmentByMovement(uiState.points, uiState.visitedPlaces)
+    }
+
     GoogleMap(
         modifier = modifier,
         cameraPositionState = cameraPositionState,
     ) {
-        Polyline(points = uiState.points.map { it.toLatLng() }, color = TrackColor)
+        movementSegments.forEach { segment ->
+            Polyline(points = segment.map { it.toLatLng() }, color = TrackColor)
+        }
         uiState.visitedStreetRuns.forEach { run ->
             Polyline(
                 points = run.points.map { it.toLatLng() },
@@ -162,23 +171,25 @@ private fun TrackMap(uiState: MapUiState, modifier: Modifier = Modifier) {
             )
         }
 
-        for (i in uiState.points.indices) {
-            if (i % ARROW_POINT_INTERVAL != 0 || i >= uiState.points.size - 1) continue
-            val current = uiState.points[i]
-            val next = uiState.points[i + 1]
-            Marker(
-                state = MarkerState(position = current.toLatLng()),
-                icon = arrowIcon,
-                anchor = Offset(0.5f, 0.5f),
-                flat = true,
-                rotation = GeoMath.bearingDegrees(
-                    current.latitude,
-                    current.longitude,
-                    next.latitude,
-                    next.longitude,
-                ).toFloat(),
-                onClick = { true },
-            )
+        movementSegments.forEach { segment ->
+            for (i in segment.indices) {
+                if (i % ARROW_POINT_INTERVAL != 0 || i >= segment.size - 1) continue
+                val current = segment[i]
+                val next = segment[i + 1]
+                Marker(
+                    state = MarkerState(position = current.toLatLng()),
+                    icon = arrowIcon,
+                    anchor = Offset(0.5f, 0.5f),
+                    flat = true,
+                    rotation = GeoMath.bearingDegrees(
+                        current.latitude,
+                        current.longitude,
+                        next.latitude,
+                        next.longitude,
+                    ).toFloat(),
+                    onClick = { true },
+                )
+            }
         }
 
         uiState.visitedPlaces.forEach { place ->
@@ -190,10 +201,12 @@ private fun TrackMap(uiState: MapUiState, modifier: Modifier = Modifier) {
             )
         }
 
-        Marker(
-            state = MarkerState(position = newest.toLatLng()),
-            title = stringResource(R.string.map_newest_position_marker_title),
-        )
+        if (uiState.selectedDate == LocalDate.now()) {
+            Marker(
+                state = MarkerState(position = newest.toLatLng()),
+                title = stringResource(R.string.map_newest_position_marker_title),
+            )
+        }
     }
 }
 
