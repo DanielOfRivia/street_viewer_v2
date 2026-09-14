@@ -1,10 +1,24 @@
 package io.github.DanielOfRivia.street_viewer_v2.ui.map
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SelectableDates
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -13,8 +27,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -33,6 +47,10 @@ import io.github.DanielOfRivia.street_viewer_v2.domain.model.LatLon
 import io.github.DanielOfRivia.street_viewer_v2.domain.model.LocationPoint
 import io.github.DanielOfRivia.street_viewer_v2.domain.model.VisitedStreetRun
 import io.github.DanielOfRivia.street_viewer_v2.ui.theme.Street_viewer_v2Theme
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
 
 private const val DEFAULT_ZOOM = 15f
 private val VisitedStreetColor = Color(0xFF00C853)
@@ -43,19 +61,54 @@ fun MapRoute(
     viewModel: MapViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    MapScreen(uiState = uiState, modifier = modifier)
+    MapScreen(uiState = uiState, onDateSelected = viewModel::onDateSelected, modifier = modifier)
 }
 
 @Composable
 fun MapScreen(
     uiState: MapUiState,
+    onDateSelected: (LocalDate) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
-    val newest = uiState.newestPoint
-    if (newest == null) {
-        EmptyMapState(modifier = modifier.fillMaxSize())
-        return
+    Box(modifier = modifier.fillMaxSize()) {
+        if (uiState.newestPoint == null) {
+            EmptyMapState(isToday = uiState.selectedDate == LocalDate.now(), modifier = Modifier.fillMaxSize())
+        } else {
+            TrackMap(uiState = uiState, modifier = Modifier.fillMaxSize())
+        }
+
+        DateSelectorBar(
+            selectedDate = uiState.selectedDate,
+            isLoading = uiState.isLoading,
+            onDateSelected = onDateSelected,
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .padding(16.dp),
+        )
+
+        uiState.errorMessage?.let { message ->
+            Surface(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(16.dp)
+                    .fillMaxWidth(),
+                color = MaterialTheme.colorScheme.errorContainer,
+                shape = MaterialTheme.shapes.medium,
+            ) {
+                Text(
+                    text = stringResource(R.string.map_history_load_failed, message),
+                    color = MaterialTheme.colorScheme.onErrorContainer,
+                    modifier = Modifier.padding(12.dp),
+                    textAlign = TextAlign.Center,
+                )
+            }
+        }
     }
+}
+
+@Composable
+private fun TrackMap(uiState: MapUiState, modifier: Modifier = Modifier) {
+    val newest = requireNotNull(uiState.newestPoint)
 
     val cameraPositionState = rememberCameraPositionState {
         position = CameraPosition.fromLatLngZoom(newest.toLatLng(), DEFAULT_ZOOM)
@@ -76,7 +129,7 @@ fun MapScreen(
     }
 
     GoogleMap(
-        modifier = modifier.fillMaxSize(),
+        modifier = modifier,
         cameraPositionState = cameraPositionState,
     ) {
         Polyline(points = uiState.points.map { it.toLatLng() })
@@ -94,11 +147,83 @@ fun MapScreen(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun EmptyMapState(modifier: Modifier = Modifier) {
+private fun DateSelectorBar(
+    selectedDate: LocalDate,
+    isLoading: Boolean,
+    onDateSelected: (LocalDate) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var showPicker by remember { mutableStateOf(false) }
+
+    Surface(
+        modifier = modifier,
+        shape = MaterialTheme.shapes.medium,
+        shadowElevation = 4.dp,
+    ) {
+        val todayLabel = stringResource(R.string.map_date_today)
+        Row(
+            modifier = Modifier
+                .clickable { showPicker = true }
+                .padding(horizontal = 16.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(text = selectedDate.toDisplayLabel(todayLabel), style = MaterialTheme.typography.bodyMedium)
+            if (isLoading) {
+                Spacer(Modifier.width(8.dp))
+                CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+            }
+        }
+    }
+
+    if (showPicker) {
+        val datePickerState = rememberDatePickerState(
+            initialSelectedDateMillis = selectedDate.toUtcMillis(),
+            selectableDates = object : SelectableDates {
+                override fun isSelectableDate(utcTimeMillis: Long): Boolean =
+                    utcTimeMillis <= System.currentTimeMillis()
+            },
+        )
+        DatePickerDialog(
+            onDismissRequest = { showPicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    datePickerState.selectedDateMillis?.let { millis ->
+                        onDateSelected(Instant.ofEpochMilli(millis).atZone(ZoneOffset.UTC).toLocalDate())
+                    }
+                    showPicker = false
+                }) {
+                    Text(stringResource(R.string.map_date_picker_confirm))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showPicker = false }) {
+                    Text(stringResource(R.string.map_date_picker_cancel))
+                }
+            },
+        ) {
+            DatePicker(state = datePickerState)
+        }
+    }
+}
+
+private fun LocalDate.toDisplayLabel(todayLabel: String): String =
+    if (this == LocalDate.now()) {
+        todayLabel
+    } else {
+        format(DateTimeFormatter.ofPattern("MMM d, yyyy"))
+    }
+
+private fun LocalDate.toUtcMillis(): Long = atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
+
+@Composable
+private fun EmptyMapState(isToday: Boolean, modifier: Modifier = Modifier) {
     Box(modifier = modifier, contentAlignment = Alignment.Center) {
         Text(
-            text = stringResource(R.string.map_empty_state),
+            text = stringResource(
+                if (isToday) R.string.map_empty_state else R.string.map_empty_state_historical,
+            ),
             style = MaterialTheme.typography.bodyLarge,
             textAlign = TextAlign.Center,
             modifier = Modifier.padding(24.dp),
@@ -136,6 +261,19 @@ private fun MapScreenWithTrackPreview() {
                         ),
                     ),
                 ),
+            ),
+        )
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+private fun MapScreenHistoricalErrorPreview() {
+    Street_viewer_v2Theme {
+        MapScreen(
+            uiState = MapUiState(
+                selectedDate = LocalDate.now().minusDays(3),
+                errorMessage = "Server returned HTTP 500",
             ),
         )
     }

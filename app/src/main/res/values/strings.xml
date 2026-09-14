@@ -20,7 +20,13 @@
     <string name="tab_map">Map</string>
 
     <string name="map_empty_state">No points recorded yet. Start tracking to see your route here.</string>
+    <string name="map_empty_state_historical">No points recorded on this day.</string>
     <string name="map_newest_position_marker_title">Current position</string>
+
+    <string name="map_date_today">Today</string>
+    <string name="map_date_picker_confirm">OK</string>
+    <string name="map_date_picker_cancel">Cancel</string>
+    <string name="map_history_load_failed">Couldn\'t load this day: %1$s</string>
 
     <string name="tracking_upload">Upload</string>
     <string name="tracking_sync_in_progress">Uploading…</string>

@@ -14,3 +14,12 @@ data class LocationDto(
 data class UploadLocationsRequestDto(
     val locations: List<LocationDto>,
 )
+
+@Serializable
+data class LocationRecordDto(
+    val id: Long,
+    val latitude: Double,
+    val longitude: Double,
+    val timestamp: Long,
+    val accuracy: Float,
+)
