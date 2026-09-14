@@ -71,6 +71,7 @@ import java.time.format.DateTimeFormatter
 private const val DEFAULT_ZOOM = 15f
 private const val ARROW_POINT_INTERVAL = 5
 private val VisitedStreetColor = Color(0xFF00C853)
+private val TrackColor = Color.Black
 
 @Composable
 fun MapRoute(
@@ -152,7 +153,7 @@ private fun TrackMap(uiState: MapUiState, modifier: Modifier = Modifier) {
         modifier = modifier,
         cameraPositionState = cameraPositionState,
     ) {
-        Polyline(points = uiState.points.map { it.toLatLng() })
+        Polyline(points = uiState.points.map { it.toLatLng() }, color = TrackColor)
         uiState.visitedStreetRuns.forEach { run ->
             Polyline(
                 points = run.points.map { it.toLatLng() },
@@ -198,7 +199,7 @@ private fun TrackMap(uiState: MapUiState, modifier: Modifier = Modifier) {
 
 @Composable
 private fun rememberArrowIcon(): BitmapDescriptor {
-    val colorArgb = MaterialTheme.colorScheme.onSurface.toArgb()
+    val colorArgb = TrackColor.toArgb()
     return remember(colorArgb) {
         val sizePx = 36
         val bitmap = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
