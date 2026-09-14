@@ -38,7 +38,14 @@ class MapViewModel @Inject constructor(
         locationPointRepository.observeAllPoints(),
         dayLoadState,
     ) { date, livePoints, loadState ->
-        val points = if (date == LocalDate.now()) livePoints else loadState.historicalPoints.orEmpty()
+        // observeAllPoints() returns everything still in local storage (up to the 30-day
+        // retention window), not just today -- filter down to the selected day's own range.
+        val points = if (date == LocalDate.now()) {
+            val (startMillis, endMillis) = dayRangeMillis(date)
+            livePoints.filter { it.timestampMillis in startMillis..endMillis }
+        } else {
+            loadState.historicalPoints.orEmpty()
+        }
         MapUiState(
             selectedDate = date,
             points = points,
@@ -65,13 +72,18 @@ class MapViewModel @Inject constructor(
         loadDay(date)
     }
 
+    private fun dayRangeMillis(date: LocalDate): Pair<Long, Long> {
+        val zone = ZoneId.systemDefault()
+        val startMillis = date.atStartOfDay(zone).toInstant().toEpochMilli()
+        val endMillis = date.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli() - 1
+        return startMillis to endMillis
+    }
+
     private fun loadDay(date: LocalDate) {
         viewModelScope.launch {
             dayLoadState.update { it.copy(isLoading = true) }
 
-            val zone = ZoneId.systemDefault()
-            val startMillis = date.atStartOfDay(zone).toInstant().toEpochMilli()
-            val endMillis = date.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli() - 1
+            val (startMillis, endMillis) = dayRangeMillis(date)
 
             val places = visitedPlacesRepository.getVisitedPlaces(startMillis, endMillis)
 

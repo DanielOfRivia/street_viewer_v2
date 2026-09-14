@@ -69,10 +69,10 @@ class MapViewModelTest {
             awaitItem()
 
             locationPointRepository.insert(point(timestampMillis = 100L))
-            assertEquals(100L, awaitItem().newestPoint?.timestampMillis)
+            assertEquals(todayStartMillis + 100L, awaitItem().newestPoint?.timestampMillis)
 
             locationPointRepository.insert(point(timestampMillis = 200L))
-            assertEquals(200L, awaitItem().newestPoint?.timestampMillis)
+            assertEquals(todayStartMillis + 200L, awaitItem().newestPoint?.timestampMillis)
         }
     }
 
@@ -258,10 +258,18 @@ class MapViewModelTest {
         businesses = emptyList(),
     )
 
+    private val todayStartMillis = LocalDate.now()
+        .atStartOfDay(java.time.ZoneId.systemDefault())
+        .toInstant()
+        .toEpochMilli()
+
+    // MapViewModel now filters "today" live points down to today's own range (it used to pass
+    // observeAllPoints() through unfiltered, which leaked points from the whole 30-day local
+    // retention window onto the "today" track) -- offsets must land within today, not near epoch.
     private fun point(timestampMillis: Long) = LocationPoint(
         latitude = 43.6532,
         longitude = -79.3832,
-        timestampMillis = timestampMillis,
+        timestampMillis = todayStartMillis + timestampMillis,
         accuracyMeters = 6.4f,
     )
 }
