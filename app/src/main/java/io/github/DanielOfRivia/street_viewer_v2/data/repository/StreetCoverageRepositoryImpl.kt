@@ -34,8 +34,15 @@ class StreetCoverageRepositoryImpl @Inject constructor(
             // geometry itself doesn't change, only which points we've recorded.
             if (cached == null || !cached.contains(requiredBounds)) {
                 val paddedBounds = requiredBounds.padded(CACHE_PADDING_DEGREES)
-                cachedWays = overpassClient.fetchHighways(paddedBounds)
-                cachedBounds = paddedBounds
+                val fetched = overpassClient.fetchHighways(paddedBounds)
+                // fetchHighways silently swallows failures into an empty list -- only record
+                // this bounds as cached once something real came back, so a transient failure
+                // (rather than a genuinely road-free area) gets retried on the next call instead
+                // of permanently pinning this session to an empty result for that whole area.
+                if (fetched.isNotEmpty()) {
+                    cachedWays = fetched
+                    cachedBounds = paddedBounds
+                }
             }
             cachedWays
         }

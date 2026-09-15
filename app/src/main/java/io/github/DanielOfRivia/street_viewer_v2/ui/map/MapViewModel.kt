@@ -7,13 +7,16 @@ import io.github.DanielOfRivia.street_viewer_v2.domain.LocationGapFiller
 import io.github.DanielOfRivia.street_viewer_v2.domain.model.LocationHistoryResult
 import io.github.DanielOfRivia.street_viewer_v2.domain.model.LocationPoint
 import io.github.DanielOfRivia.street_viewer_v2.domain.model.VisitedPlace
+import io.github.DanielOfRivia.street_viewer_v2.domain.model.VisitedStreetRun
 import io.github.DanielOfRivia.street_viewer_v2.domain.repository.LocationHistoryRepository
 import io.github.DanielOfRivia.street_viewer_v2.domain.repository.LocationPointRepository
 import io.github.DanielOfRivia.street_viewer_v2.domain.repository.StreetCoverageRepository
 import io.github.DanielOfRivia.street_viewer_v2.domain.repository.VisitedPlacesRepository
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -32,26 +35,43 @@ class MapViewModel @Inject constructor(
 
     private val selectedDate = MutableStateFlow(LocalDate.now())
     private val dayLoadState = MutableStateFlow(DayLoadState())
+    private val visitedStreetRuns = MutableStateFlow<List<VisitedStreetRun>>(emptyList())
+    private val isComputingStreetCoverage = MutableStateFlow(false)
 
-    val uiState: StateFlow<MapUiState> = combine(
+    // Cheap and non-suspending -- safe to combine directly into uiState's own transform below.
+    // Street-coverage matching is NOT folded in here because it can call out to Overpass over
+    // the network; combine() runs its transform to completion for one emission before it will
+    // process the next, so a slow suspend call inside it would block selectedDate/isLoading from
+    // ever reaching the UI while it's in flight -- exactly the "changing date freezes on the
+    // previous day" symptom this splits apart.
+    private val effectivePoints: Flow<List<LocationPoint>> = combine(
         selectedDate,
         locationPointRepository.observeAllPoints(),
         dayLoadState,
     ) { date, livePoints, loadState ->
         // observeAllPoints() returns everything still in local storage (up to the 30-day
         // retention window), not just today -- filter down to the selected day's own range.
-        val points = if (date == LocalDate.now()) {
+        if (date == LocalDate.now()) {
             val (startMillis, endMillis) = dayRangeMillis(date)
             livePoints.filter { it.timestampMillis in startMillis..endMillis }
         } else {
             loadState.historicalPoints.orEmpty()
         }
+    }
+
+    val uiState: StateFlow<MapUiState> = combine(
+        selectedDate,
+        effectivePoints,
+        dayLoadState,
+        visitedStreetRuns,
+        isComputingStreetCoverage,
+    ) { date, points, loadState, streetRuns, coverageLoading ->
         MapUiState(
             selectedDate = date,
             points = points,
-            visitedStreetRuns = streetCoverageRepository.getVisitedStreetRuns(LocationGapFiller.fillGaps(points)),
+            visitedStreetRuns = streetRuns,
             visitedPlaces = loadState.visitedPlaces,
-            isLoading = loadState.isLoading,
+            isLoading = loadState.isLoading || coverageLoading,
             errorMessage = loadState.errorMessage,
         )
     }.stateIn(
@@ -61,6 +81,16 @@ class MapViewModel @Inject constructor(
     )
 
     init {
+        // collectLatest cancels an in-flight (possibly slow, network-bound) coverage lookup as
+        // soon as the points it was computing for are no longer current -- e.g. the user picked
+        // another day before the previous one's Overpass call returned.
+        viewModelScope.launch {
+            effectivePoints.collectLatest { points ->
+                isComputingStreetCoverage.value = true
+                visitedStreetRuns.value = streetCoverageRepository.getVisitedStreetRuns(LocationGapFiller.fillGaps(points))
+                isComputingStreetCoverage.value = false
+            }
+        }
         loadDay(LocalDate.now())
     }
 
