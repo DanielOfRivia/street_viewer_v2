@@ -17,6 +17,9 @@ interface LocationPointDao {
     @Query("SELECT * FROM location_points ORDER BY timestamp ASC")
     fun observeAll(): Flow<List<LocationPointEntity>>
 
+    @Query("SELECT * FROM location_points ORDER BY timestamp DESC LIMIT 1")
+    suspend fun getMostRecent(): LocationPointEntity?
+
     @Query("SELECT * FROM location_points WHERE syncedAtMillis IS NULL ORDER BY timestamp ASC LIMIT :limit")
     suspend fun getUnsyncedPage(limit: Int): List<LocationPointEntity>
 

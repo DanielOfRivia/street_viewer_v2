@@ -9,19 +9,19 @@ import io.github.DanielOfRivia.street_viewer_v2.data.remote.OverpassClientImpl
 import io.github.DanielOfRivia.street_viewer_v2.data.repository.DataStoreTrackingPreferencesRepository
 import io.github.DanielOfRivia.street_viewer_v2.data.repository.LocationHistoryRepositoryImpl
 import io.github.DanielOfRivia.street_viewer_v2.data.repository.LocationPointRepositoryImpl
-import io.github.DanielOfRivia.street_viewer_v2.data.repository.StreetCoverageRepositoryImpl
 import io.github.DanielOfRivia.street_viewer_v2.data.repository.SyncRepositoryImpl
 import io.github.DanielOfRivia.street_viewer_v2.data.repository.TrackingStatusRepositoryImpl
 import io.github.DanielOfRivia.street_viewer_v2.data.repository.VisitedPlacesRepositoryImpl
+import io.github.DanielOfRivia.street_viewer_v2.data.repository.VisitedStreetCoverageRepositoryImpl
 import io.github.DanielOfRivia.street_viewer_v2.data.repository.WorkManagerSyncScheduler
 import io.github.DanielOfRivia.street_viewer_v2.domain.repository.LocationHistoryRepository
 import io.github.DanielOfRivia.street_viewer_v2.domain.repository.LocationPointRepository
-import io.github.DanielOfRivia.street_viewer_v2.domain.repository.StreetCoverageRepository
 import io.github.DanielOfRivia.street_viewer_v2.domain.repository.SyncRepository
 import io.github.DanielOfRivia.street_viewer_v2.domain.repository.SyncScheduler
 import io.github.DanielOfRivia.street_viewer_v2.domain.repository.TrackingPreferencesRepository
 import io.github.DanielOfRivia.street_viewer_v2.domain.repository.TrackingStatusRepository
 import io.github.DanielOfRivia.street_viewer_v2.domain.repository.VisitedPlacesRepository
+import io.github.DanielOfRivia.street_viewer_v2.domain.repository.VisitedStreetCoverageRepository
 import javax.inject.Singleton
 
 @Module
@@ -66,9 +66,9 @@ abstract class RepositoryModule {
 
     @Binds
     @Singleton
-    abstract fun bindStreetCoverageRepository(
-        impl: StreetCoverageRepositoryImpl,
-    ): StreetCoverageRepository
+    abstract fun bindVisitedStreetCoverageRepository(
+        impl: VisitedStreetCoverageRepositoryImpl,
+    ): VisitedStreetCoverageRepository
 
     @Binds
     @Singleton

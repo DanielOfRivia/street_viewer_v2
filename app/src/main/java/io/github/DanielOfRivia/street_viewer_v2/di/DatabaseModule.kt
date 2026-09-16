@@ -9,6 +9,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import io.github.DanielOfRivia.street_viewer_v2.data.local.AppDatabase
 import io.github.DanielOfRivia.street_viewer_v2.data.local.LocationPointDao
+import io.github.DanielOfRivia.street_viewer_v2.data.local.VisitedStreetSegmentDao
 import javax.inject.Singleton
 
 @Module
@@ -23,4 +24,8 @@ object DatabaseModule {
     @Provides
     fun provideLocationPointDao(database: AppDatabase): LocationPointDao =
         database.locationPointDao()
+
+    @Provides
+    fun provideVisitedStreetSegmentDao(database: AppDatabase): VisitedStreetSegmentDao =
+        database.visitedStreetSegmentDao()
 }

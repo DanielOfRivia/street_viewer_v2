@@ -20,6 +20,7 @@ import io.github.DanielOfRivia.street_viewer_v2.domain.model.TrackingStopReason
 import io.github.DanielOfRivia.street_viewer_v2.domain.repository.LocationPointRepository
 import io.github.DanielOfRivia.street_viewer_v2.domain.repository.TrackingPreferencesRepository
 import io.github.DanielOfRivia.street_viewer_v2.domain.repository.TrackingStatusRepository
+import io.github.DanielOfRivia.street_viewer_v2.domain.repository.VisitedStreetCoverageRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -32,10 +33,12 @@ class TrackingService : Service() {
 
     @Inject lateinit var fusedLocationClient: FusedLocationProviderClient
     @Inject lateinit var locationPointRepository: LocationPointRepository
+    @Inject lateinit var visitedStreetCoverageRepository: VisitedStreetCoverageRepository
     @Inject lateinit var trackingStatusRepository: TrackingStatusRepository
     @Inject lateinit var trackingPreferencesRepository: TrackingPreferencesRepository
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private var lastAcceptedPoint: LocationPoint? = null
     private val locationRequest = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, UPDATE_INTERVAL_MILLIS)
         // setIntervalMillis (set above via the constructor) is only a target, not a floor:
         // the fused provider can deliver a fresher/better fix ahead of schedule (observed
@@ -112,6 +115,13 @@ class TrackingService : Service() {
         locationCallback = callback
         isTracking = true
         trackingStatusRepository.reportStarted()
+
+        // Restores the gap-fill bridge across a service restart (sticky restart, reboot
+        // resume) -- without this, the first fix after a restart would be treated as if
+        // nothing came before it, missing whatever street segment lies between the two.
+        serviceScope.launch {
+            lastAcceptedPoint = locationPointRepository.getMostRecentPoint()
+        }
     }
 
     private fun onNewLocation(location: Location) {
@@ -122,16 +132,26 @@ class TrackingService : Service() {
         if (location.accuracy > MAX_ACCEPTABLE_ACCURACY_METERS) return
 
         serviceScope.launch {
-            locationPointRepository.insert(
-                LocationPoint(
-                    latitude = location.latitude,
-                    longitude = location.longitude,
-                    timestampMillis = location.time,
-                    accuracyMeters = location.accuracy,
-                )
+            val point = LocationPoint(
+                latitude = location.latitude,
+                longitude = location.longitude,
+                timestampMillis = location.time,
+                accuracyMeters = location.accuracy,
             )
+            locationPointRepository.insert(point)
             sessionPointCount++
             startForeground(TrackingNotification.NOTIFICATION_ID, TrackingNotification.build(this@TrackingService, sessionPointCount))
+
+            val previous = lastAcceptedPoint
+            lastAcceptedPoint = point
+            // Decorative/best-effort, same as everywhere else this app talks to Overpass --
+            // never let a coverage-matching hiccup interrupt tracking itself. Whatever isn't
+            // recorded this time gets picked up again on the next fix.
+            try {
+                visitedStreetCoverageRepository.recordVisitedSegments(listOfNotNull(previous, point))
+            } catch (e: Exception) {
+                // ignored
+            }
         }
     }
 

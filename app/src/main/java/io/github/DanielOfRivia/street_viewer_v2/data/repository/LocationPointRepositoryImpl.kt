@@ -20,6 +20,8 @@ class LocationPointRepositoryImpl @Inject constructor(
     override fun observeAllPoints(): Flow<List<LocationPoint>> =
         dao.observeAll().map { entities -> entities.map { it.toDomain() } }
 
+    override suspend fun getMostRecentPoint(): LocationPoint? = dao.getMostRecent()?.toDomain()
+
     override suspend fun insert(point: LocationPoint) {
         dao.insert(point.toEntity())
     }

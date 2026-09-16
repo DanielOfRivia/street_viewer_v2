@@ -1,17 +1,17 @@
 package io.github.DanielOfRivia.street_viewer_v2.testutil
 
 import io.github.DanielOfRivia.street_viewer_v2.data.remote.OverpassClient
-import io.github.DanielOfRivia.street_viewer_v2.domain.model.LatLon
 import io.github.DanielOfRivia.street_viewer_v2.domain.model.MapBounds
+import io.github.DanielOfRivia.street_viewer_v2.domain.model.OsmWay
 
 class FakeOverpassClient : OverpassClient {
 
-    var ways: List<List<LatLon>> = emptyList()
+    var ways: List<OsmWay> = emptyList()
     var fetchCallCount = 0
         private set
     val requestedBounds = mutableListOf<MapBounds>()
 
-    override suspend fun fetchHighways(bounds: MapBounds): List<List<LatLon>> {
+    override suspend fun fetchHighways(bounds: MapBounds): List<OsmWay> {
         fetchCallCount++
         requestedBounds.add(bounds)
         return ways

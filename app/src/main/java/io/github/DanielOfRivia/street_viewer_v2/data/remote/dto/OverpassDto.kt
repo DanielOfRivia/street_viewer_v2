@@ -9,6 +9,7 @@ data class OverpassResponseDto(
 
 @Serializable
 data class OverpassElementDto(
+    val id: Long,
     val type: String,
     val geometry: List<OverpassNodeDto>? = null,
 )

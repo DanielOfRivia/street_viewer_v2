@@ -2,6 +2,7 @@ package io.github.DanielOfRivia.street_viewer_v2.data.remote
 
 import io.github.DanielOfRivia.street_viewer_v2.domain.model.LatLon
 import io.github.DanielOfRivia.street_viewer_v2.domain.model.MapBounds
+import io.github.DanielOfRivia.street_viewer_v2.domain.model.OsmWay
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import mockwebserver3.MockResponse
@@ -48,7 +49,7 @@ class OverpassClientImplTest {
 
         val ways = client.fetchHighways(MapBounds(south = 43.6, west = -79.4, north = 43.7, east = -79.3))
 
-        assertEquals(listOf(listOf(LatLon(43.65, -79.38), LatLon(43.66, -79.37))), ways)
+        assertEquals(listOf(OsmWay(id = 1, nodes = listOf(LatLon(43.65, -79.38), LatLon(43.66, -79.37)))), ways)
         val recorded = server.takeRequest()
         assertEquals("POST", recorded.method)
         // Overpass's documented format: the query is a "data" form field, not a raw body --

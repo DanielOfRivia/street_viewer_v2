@@ -7,8 +7,8 @@ import io.github.DanielOfRivia.street_viewer_v2.domain.model.VisitedPlace
 import io.github.DanielOfRivia.street_viewer_v2.domain.model.VisitedStreetRun
 import io.github.DanielOfRivia.street_viewer_v2.testutil.FakeLocationHistoryRepository
 import io.github.DanielOfRivia.street_viewer_v2.testutil.FakeLocationPointRepository
-import io.github.DanielOfRivia.street_viewer_v2.testutil.FakeStreetCoverageRepository
 import io.github.DanielOfRivia.street_viewer_v2.testutil.FakeVisitedPlacesRepository
+import io.github.DanielOfRivia.street_viewer_v2.testutil.FakeVisitedStreetCoverageRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -29,7 +29,7 @@ class MapViewModelTest {
 
     private val dispatcher = StandardTestDispatcher()
     private lateinit var locationPointRepository: FakeLocationPointRepository
-    private lateinit var streetCoverageRepository: FakeStreetCoverageRepository
+    private lateinit var visitedStreetCoverageRepository: FakeVisitedStreetCoverageRepository
     private lateinit var locationHistoryRepository: FakeLocationHistoryRepository
     private lateinit var visitedPlacesRepository: FakeVisitedPlacesRepository
     private lateinit var viewModel: MapViewModel
@@ -38,12 +38,12 @@ class MapViewModelTest {
     fun setUp() {
         Dispatchers.setMain(dispatcher)
         locationPointRepository = FakeLocationPointRepository()
-        streetCoverageRepository = FakeStreetCoverageRepository()
+        visitedStreetCoverageRepository = FakeVisitedStreetCoverageRepository()
         locationHistoryRepository = FakeLocationHistoryRepository()
         visitedPlacesRepository = FakeVisitedPlacesRepository()
         viewModel = MapViewModel(
             locationPointRepository,
-            streetCoverageRepository,
+            visitedStreetCoverageRepository,
             locationHistoryRepository,
             visitedPlacesRepository,
         )
@@ -90,15 +90,15 @@ class MapViewModelTest {
     }
 
     @Test
-    fun visitedStreetRunsComeFromTheStreetCoverageRepository() = runTest(dispatcher) {
-        streetCoverageRepository.visitedStreetRuns = listOf(
-            VisitedStreetRun(points = emptyList()),
-        )
-
+    fun visitedStreetRunsComeFromTheVisitedStreetCoverageRepositoryIndependentOfTheSelectedDay() = runTest(dispatcher) {
         viewModel.uiState.test {
             awaitItem()
 
-            locationPointRepository.insert(point(timestampMillis = 1L))
+            // Not gated behind inserting a point or picking a day -- this is an all-time,
+            // persisted set the ViewModel just observes.
+            visitedStreetCoverageRepository.visitedStreetRuns.value = listOf(
+                VisitedStreetRun(points = emptyList()),
+            )
             assertEquals(1, awaitItem().visitedStreetRuns.size)
         }
     }
@@ -197,7 +197,7 @@ class MapViewModelTest {
         visitedPlacesRepository.places = listOf(place)
         val freshViewModel = MapViewModel(
             locationPointRepository,
-            streetCoverageRepository,
+            visitedStreetCoverageRepository,
             locationHistoryRepository,
             visitedPlacesRepository,
         )

@@ -15,6 +15,8 @@ class FakeLocationPointRepository : LocationPointRepository {
 
     override fun observeAllPoints(): Flow<List<LocationPoint>> = points
 
+    override suspend fun getMostRecentPoint(): LocationPoint? = points.value.maxByOrNull { it.timestampMillis }
+
     override suspend fun insert(point: LocationPoint) {
         points.value = points.value + point.copy(id = nextId++)
     }

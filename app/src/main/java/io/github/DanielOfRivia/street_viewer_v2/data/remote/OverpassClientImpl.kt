@@ -4,6 +4,7 @@ import io.github.DanielOfRivia.street_viewer_v2.data.remote.dto.OverpassResponse
 import io.github.DanielOfRivia.street_viewer_v2.di.OverpassBaseUrl
 import io.github.DanielOfRivia.street_viewer_v2.domain.model.LatLon
 import io.github.DanielOfRivia.street_viewer_v2.domain.model.MapBounds
+import io.github.DanielOfRivia.street_viewer_v2.domain.model.OsmWay
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
@@ -20,7 +21,7 @@ class OverpassClientImpl @Inject constructor(
     @param:OverpassBaseUrl private val baseUrl: String,
 ) : OverpassClient {
 
-    override suspend fun fetchHighways(bounds: MapBounds): List<List<LatLon>> =
+    override suspend fun fetchHighways(bounds: MapBounds): List<OsmWay> =
         withContext(Dispatchers.IO) {
             // This overlay is decorative, not core data: any failure (offline, Overpass down,
             // fair-use throttling, malformed response) just means no colored streets for this
@@ -42,8 +43,13 @@ class OverpassClientImpl @Inject constructor(
                     val body = response.body?.string() ?: return@withContext emptyList()
                     json.decodeFromString(OverpassResponseDto.serializer(), body)
                         .elements
-                        .mapNotNull { it.geometry }
-                        .map { nodes -> nodes.map { LatLon(it.lat, it.lon) } }
+                        .filter { it.geometry != null }
+                        .map { element ->
+                            OsmWay(
+                                id = element.id,
+                                nodes = element.geometry.orEmpty().map { LatLon(it.lat, it.lon) },
+                            )
+                        }
                 }
             } catch (e: Exception) {
                 emptyList()
