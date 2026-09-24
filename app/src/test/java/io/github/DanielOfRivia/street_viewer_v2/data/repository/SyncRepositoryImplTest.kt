@@ -5,7 +5,10 @@ import io.github.DanielOfRivia.street_viewer_v2.domain.model.SyncResult
 import io.github.DanielOfRivia.street_viewer_v2.testutil.FakeClock
 import io.github.DanielOfRivia.street_viewer_v2.testutil.FakeLocationApi
 import io.github.DanielOfRivia.street_viewer_v2.testutil.FakeLocationPointRepository
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import okhttp3.MediaType.Companion.toMediaType
@@ -124,6 +127,23 @@ class SyncRepositoryImplTest {
         assertEquals(SyncResult.Success(3), result)
         assertEquals(2, api.callCount)
         assertTrue(locationPointRepository.getUnsyncedPage(100).isEmpty())
+    }
+
+    @Test
+    fun concurrentSyncsDoNotUploadTheSamePageTwice() = runTest {
+        locationPointRepository.insert(point(NOW - 1))
+        locationPointRepository.insert(point(NOW))
+        val firstUploadGate = CompletableDeferred<Unit>()
+        api.onUpload = { call -> if (call == 1) firstUploadGate.await() }
+
+        val first = async { syncRepository.uploadPendingPoints() }
+        val second = async { syncRepository.uploadPendingPoints() }
+        runCurrent()
+        firstUploadGate.complete(Unit)
+
+        assertEquals(SyncResult.Success(2), first.await())
+        assertEquals(SyncResult.Success(0), second.await())
+        assertEquals(1, api.callCount)
     }
 
     @Test

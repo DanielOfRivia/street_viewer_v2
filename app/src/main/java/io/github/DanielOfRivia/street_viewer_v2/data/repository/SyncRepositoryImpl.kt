@@ -9,6 +9,8 @@ import io.github.DanielOfRivia.street_viewer_v2.domain.Clock
 import io.github.DanielOfRivia.street_viewer_v2.domain.model.SyncResult
 import io.github.DanielOfRivia.street_viewer_v2.domain.repository.LocationPointRepository
 import io.github.DanielOfRivia.street_viewer_v2.domain.repository.SyncRepository
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.Json
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -24,7 +26,12 @@ class SyncRepositoryImpl @Inject constructor(
     @param:RetentionWindowMillis private val retentionWindowMillis: Long,
 ) : SyncRepository {
 
-    override suspend fun uploadPendingPoints(): SyncResult {
+    // The periodic and "sync now" workers have different unique-work names, so WorkManager
+    // can run both at once. Without this, both read the same unsynced page before either
+    // marks it synced, and the server receives that page twice.
+    private val uploadMutex = Mutex()
+
+    override suspend fun uploadPendingPoints(): SyncResult = uploadMutex.withLock {
         val result = uploadAllPendingPages()
         // Runs regardless of the upload outcome above: it only touches points that have
         // already been synced (in this run or an earlier one), so it's independent of
@@ -33,7 +40,7 @@ class SyncRepositoryImpl @Inject constructor(
         // makes a point eligible for this cleanup, so nothing is lost before the server
         // has actually acknowledged it.
         locationPointRepository.deleteSyncedOlderThan(clock.nowMillis() - retentionWindowMillis)
-        return result
+        result
     }
 
     private suspend fun uploadAllPendingPages(): SyncResult {
