@@ -9,6 +9,7 @@ import android.location.Location
 import android.os.IBinder
 import android.os.Looper
 import androidx.core.content.ContextCompat
+import com.google.android.gms.location.ActivityRecognitionClient
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationCallback
 import com.google.android.gms.location.LocationRequest
@@ -32,6 +33,7 @@ import javax.inject.Inject
 class TrackingService : Service() {
 
     @Inject lateinit var fusedLocationClient: FusedLocationProviderClient
+    @Inject lateinit var activityRecognitionClient: ActivityRecognitionClient
     @Inject lateinit var locationPointRepository: LocationPointRepository
     @Inject lateinit var visitedStreetCoverageRepository: VisitedStreetCoverageRepository
     @Inject lateinit var trackingStatusRepository: TrackingStatusRepository
@@ -39,7 +41,7 @@ class TrackingService : Service() {
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var lastAcceptedPoint: LocationPoint? = null
-    private val locationRequest = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, UPDATE_INTERVAL_MILLIS)
+    private val movingLocationRequest = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, UPDATE_INTERVAL_MILLIS)
         // setIntervalMillis (set above via the constructor) is only a target, not a floor:
         // the fused provider can deliver a fresher/better fix ahead of schedule (observed
         // on-device as low as ~14s between fixes with this left unset). This is the actual
@@ -51,8 +53,21 @@ class TrackingService : Service() {
         .setMinUpdateDistanceMeters(MIN_UPDATE_DISTANCE_METERS)
         .build()
 
+    // While stationary: turns nothing on itself (no GPS, no Wi-Fi scans), only takes fixes some
+    // other app already asked for. Same filters as above, so a stray passive fix while sitting
+    // still gets through no more easily than a GPS one would.
+    private val stationaryLocationRequest = LocationRequest.Builder(Priority.PRIORITY_PASSIVE, UPDATE_INTERVAL_MILLIS)
+        .setMinUpdateIntervalMillis(UPDATE_INTERVAL_MILLIS)
+        .setMinUpdateDistanceMeters(MIN_UPDATE_DISTANCE_METERS)
+        .build()
+
+    private val activityTransitionMonitor by lazy {
+        ActivityTransitionMonitor(this, activityRecognitionClient, ::onStationaryChanged)
+    }
+
     private var locationCallback: LocationCallback? = null
     private var isTracking = false
+    private var isStationary = false
     private var sessionPointCount = 0
 
     override fun onCreate() {
@@ -72,6 +87,7 @@ class TrackingService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onDestroy() {
+        activityTransitionMonitor.stop()
         locationCallback?.let { fusedLocationClient.removeLocationUpdates(it) }
         serviceScope.cancel()
         super.onDestroy()
@@ -105,7 +121,7 @@ class TrackingService : Service() {
         }
 
         try {
-            fusedLocationClient.requestLocationUpdates(locationRequest, callback, Looper.getMainLooper())
+            fusedLocationClient.requestLocationUpdates(movingLocationRequest, callback, Looper.getMainLooper())
                 .addOnFailureListener { stopTracking(TrackingStopReason.LOCATION_REQUEST_FAILED) }
         } catch (e: SecurityException) {
             stopTracking(TrackingStopReason.PERMISSION_MISSING)
@@ -115,6 +131,9 @@ class TrackingService : Service() {
         locationCallback = callback
         isTracking = true
         trackingStatusRepository.reportStarted()
+        // Starts out assuming movement (full-accuracy GPS) -- the first STILL enter switches it
+        // off, so tracking never misses the start of a walk waiting on a first transition.
+        activityTransitionMonitor.start()
 
         // Restores the gap-fill bridge across a service restart (sticky restart, reboot
         // resume) -- without this, the first fix after a restart would be treated as if
@@ -155,10 +174,28 @@ class TrackingService : Service() {
         }
     }
 
+    // Swapping the request on the same callback replaces the old one -- the fused provider keeps
+    // one request per callback, so no remove/re-add gap where a fix could be missed.
+    private fun onStationaryChanged(stationary: Boolean) {
+        val callback = locationCallback ?: return
+        if (stationary == isStationary) return
+        isStationary = stationary
+
+        val request = if (stationary) stationaryLocationRequest else movingLocationRequest
+        try {
+            fusedLocationClient.requestLocationUpdates(request, callback, Looper.getMainLooper())
+                .addOnFailureListener { stopTracking(TrackingStopReason.LOCATION_REQUEST_FAILED) }
+        } catch (e: SecurityException) {
+            stopTracking(TrackingStopReason.PERMISSION_MISSING)
+        }
+    }
+
     private fun stopTracking(reason: TrackingStopReason) {
+        activityTransitionMonitor.stop()
         locationCallback?.let { fusedLocationClient.removeLocationUpdates(it) }
         locationCallback = null
         isTracking = false
+        isStationary = false
         sessionPointCount = 0
         trackingStatusRepository.reportStopped(reason)
         // Only an explicit user stop clears the "resume on reboot" intent. A failure-driven

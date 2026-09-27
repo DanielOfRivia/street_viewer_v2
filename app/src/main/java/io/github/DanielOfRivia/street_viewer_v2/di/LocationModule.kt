@@ -1,6 +1,8 @@
 package io.github.DanielOfRivia.street_viewer_v2.di
 
 import android.content.Context
+import com.google.android.gms.location.ActivityRecognition
+import com.google.android.gms.location.ActivityRecognitionClient
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationServices
 import dagger.Module
@@ -19,4 +21,10 @@ object LocationModule {
     fun provideFusedLocationProviderClient(
         @ApplicationContext context: Context,
     ): FusedLocationProviderClient = LocationServices.getFusedLocationProviderClient(context)
+
+    @Provides
+    @Singleton
+    fun provideActivityRecognitionClient(
+        @ApplicationContext context: Context,
+    ): ActivityRecognitionClient = ActivityRecognition.getClient(context)
 }

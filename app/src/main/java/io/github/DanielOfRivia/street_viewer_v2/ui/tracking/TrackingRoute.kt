@@ -60,14 +60,14 @@ fun TrackingRoute(
         TrackingService.start(context)
     }
 
-    val locationPermissionLauncher = rememberLauncherForActivityResult(
+    val trackingPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions(),
     ) { result ->
-        hasRequestedLocationPermission = true
-        val granted = result[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
-            result[Manifest.permission.ACCESS_COARSE_LOCATION] == true
+        if (Manifest.permission.ACCESS_FINE_LOCATION in result) hasRequestedLocationPermission = true
         refreshPermissionState()
-        if (granted) {
+        // Only location decides whether tracking can start -- activity recognition just lets it
+        // switch GPS off while stationary, so tracking still starts if that one was denied.
+        if (context.hasLocationPermission()) {
             requestNotificationPermissionThenStart(context, notificationPermissionLauncher)
         }
     }
@@ -95,12 +95,11 @@ fun TrackingRoute(
     TrackingScreen(
         uiState = uiState,
         onStartClick = {
-            if (context.hasLocationPermission()) {
+            val missing = context.missingTrackingPermissions()
+            if (missing.isEmpty()) {
                 requestNotificationPermissionThenStart(context, notificationPermissionLauncher)
             } else {
-                locationPermissionLauncher.launch(
-                    arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION),
-                )
+                trackingPermissionLauncher.launch(missing)
             }
         },
         onStopClick = { TrackingService.stop(context) },
@@ -130,6 +129,20 @@ private fun Context.hasLocationPermission(): Boolean {
     val coarse = ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION)
     return fine == PackageManager.PERMISSION_GRANTED || coarse == PackageManager.PERMISSION_GRANTED
 }
+
+// Activity recognition is asked for here, alongside location, even when location is already
+// granted -- otherwise anyone who granted location before it was added would never be asked.
+// Once the user has permanently denied it, the system returns immediately without a dialog.
+private fun Context.missingTrackingPermissions(): Array<String> = buildList {
+    if (!hasLocationPermission()) {
+        add(Manifest.permission.ACCESS_FINE_LOCATION)
+        add(Manifest.permission.ACCESS_COARSE_LOCATION)
+    }
+    val activityRecognition = ContextCompat.checkSelfPermission(this@missingTrackingPermissions, Manifest.permission.ACTIVITY_RECOGNITION)
+    if (activityRecognition != PackageManager.PERMISSION_GRANTED) {
+        add(Manifest.permission.ACTIVITY_RECOGNITION)
+    }
+}.toTypedArray()
 
 private fun Context.isLocationPermissionPermanentlyDenied(): Boolean {
     val activity = findActivity() ?: return false
