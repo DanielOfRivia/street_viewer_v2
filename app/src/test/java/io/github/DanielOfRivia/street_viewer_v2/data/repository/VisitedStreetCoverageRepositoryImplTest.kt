@@ -207,12 +207,47 @@ class VisitedStreetCoverageRepositoryImplTest {
         }
     }
 
+    @Test
+    fun coarsePointsAreRecordedElsewhereButNeverColourStreets() = runTest {
+        overpassClient.ways = listOf(way(1L, LatLon(0.0, 0.000), LatLon(0.0, 0.001)))
+
+        repository.recordVisitedSegments(listOf(point(0.0, 0.000, accuracyMeters = 120f)))
+
+        assertEquals(0, overpassClient.fetchCallCount)
+        repository.observeVisitedStreetRuns().test {
+            assertTrue(awaitItem().isEmpty())
+        }
+    }
+
+    @Test
+    fun aCoarsePointBetweenTwoPreciseOnesDoesNotBreakTheirGapFill() = runTest {
+        // ~111m apart, 60s apart: walking pace, so the stretch between them gets gap-filled.
+        overpassClient.ways = listOf(way(1L, LatLon(0.0, 0.000), LatLon(0.0, 0.0005), LatLon(0.0, 0.001)))
+
+        repository.recordVisitedSegments(
+            listOf(
+                point(0.0, 0.000, timestampMillis = 0L),
+                point(0.002, 0.0005, timestampMillis = 30_000L, accuracyMeters = 150f),
+                point(0.0, 0.001, timestampMillis = 60_000L),
+            ),
+        )
+
+        repository.observeVisitedStreetRuns().test {
+            assertEquals(2, awaitItem().size)
+        }
+    }
+
     private fun way(id: Long, vararg nodes: LatLon) = OsmWay(id = id, nodes = nodes.toList())
 
-    private fun point(latitude: Double, longitude: Double, timestampMillis: Long = 0L) = LocationPoint(
+    private fun point(
+        latitude: Double,
+        longitude: Double,
+        timestampMillis: Long = 0L,
+        accuracyMeters: Float = 5f,
+    ) = LocationPoint(
         latitude = latitude,
         longitude = longitude,
         timestampMillis = timestampMillis,
-        accuracyMeters = 5f,
+        accuracyMeters = accuracyMeters,
     )
 }

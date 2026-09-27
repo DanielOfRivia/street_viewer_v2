@@ -90,6 +90,22 @@ class MapViewModelTest {
     }
 
     @Test
+    fun coarsePointsAreLeftOutOfTheDrawnTrack() = runTest(dispatcher) {
+        viewModel.uiState.test {
+            awaitItem()
+
+            locationPointRepository.insert(point(timestampMillis = 1L))
+            assertEquals(1, awaitItem().points.size)
+
+            // Still stored (and uploaded, for stay detection) -- just not drawn as a jump, so the
+            // drawn state doesn't change at all.
+            locationPointRepository.insert(point(timestampMillis = 2L).copy(accuracyMeters = 120f))
+            expectNoEvents()
+            assertEquals(todayStartMillis + 1L, viewModel.uiState.value.newestPoint?.timestampMillis)
+        }
+    }
+
+    @Test
     fun visitedStreetRunsComeFromTheVisitedStreetCoverageRepositoryIndependentOfTheSelectedDay() = runTest(dispatcher) {
         viewModel.uiState.test {
             awaitItem()

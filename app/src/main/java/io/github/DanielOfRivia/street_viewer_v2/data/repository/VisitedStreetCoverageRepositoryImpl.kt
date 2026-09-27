@@ -63,8 +63,10 @@ class VisitedStreetCoverageRepositoryImpl @Inject constructor(
         return true
     }
 
+    // Coarse fixes are dropped before gap-filling, not after -- one 150 m-off fix would otherwise
+    // colour streets the user never set foot on, and gap-fill a line towards it.
     private fun visitedPointsOf(points: List<LocationPoint>): List<LatLon> =
-        LocationGapFiller.fillGaps(points).map { LatLon(it.latitude, it.longitude) }
+        LocationGapFiller.fillGaps(points.filter { it.isPrecise }).map { LatLon(it.latitude, it.longitude) }
 
     /** The cached ways, and whether they're known to cover all of [requiredBounds]. */
     private suspend fun waysCovering(requiredBounds: MapBounds): Pair<List<OsmWay>, Boolean> =

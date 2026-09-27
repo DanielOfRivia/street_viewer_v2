@@ -27,6 +27,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 @AndroidEntryPoint
@@ -40,7 +41,11 @@ class TrackingService : Service() {
     @Inject lateinit var trackingPreferencesRepository: TrackingPreferencesRepository
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-    private var lastAcceptedPoint: LocationPoint? = null
+    // Main thread only, like the rest of the tracking state below.
+    private var lastRecordedPoint: LocationPoint? = null
+    // Kept separately for street coverage's gap-filling, which only ever bridges precise fixes --
+    // a coarse fix in between shouldn't cut the line between the precise ones on either side.
+    private var lastPrecisePoint: LocationPoint? = null
     private val movingLocationRequest = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, UPDATE_INTERVAL_MILLIS)
         // setIntervalMillis (set above via the constructor) is only a target, not a floor:
         // the fused provider can deliver a fresher/better fix ahead of schedule (observed
@@ -54,8 +59,8 @@ class TrackingService : Service() {
         .build()
 
     // While stationary: turns nothing on itself (no GPS, no Wi-Fi scans), only takes fixes some
-    // other app already asked for. Same filters as above, so a stray passive fix while sitting
-    // still gets through no more easily than a GPS one would.
+    // other app already asked for. Same interval/distance filters as above, so a stray passive
+    // fix while sitting still gets through no more easily than a GPS one would.
     private val stationaryLocationRequest = LocationRequest.Builder(Priority.PRIORITY_PASSIVE, UPDATE_INTERVAL_MILLIS)
         .setMinUpdateIntervalMillis(UPDATE_INTERVAL_MILLIS)
         .setMinUpdateDistanceMeters(MIN_UPDATE_DISTANCE_METERS)
@@ -139,39 +144,82 @@ class TrackingService : Service() {
         // resume) -- without this, the first fix after a restart would be treated as if
         // nothing came before it, missing whatever street segment lies between the two.
         serviceScope.launch {
-            lastAcceptedPoint = locationPointRepository.getMostRecentPoint()
+            val restored = locationPointRepository.getMostRecentPoint()
+            withContext(Dispatchers.Main) {
+                // A fix may already have arrived while the query ran -- that one is newer.
+                if (lastRecordedPoint == null) {
+                    lastRecordedPoint = restored
+                    lastPrecisePoint = restored?.takeIf { it.isPrecise }
+                }
+            }
         }
     }
 
     private fun onNewLocation(location: Location) {
-        // A fix this imprecise (weak signal, indoors, urban canyon, GPS still warming up)
-        // would show up on the map as a spurious jump off the actual street rather than
-        // genuine movement. Silently dropped, same as the interval/distance filters above --
-        // there's always a next fix, no need to surface this to the user.
-        if (location.accuracy > MAX_ACCEPTABLE_ACCURACY_METERS) return
+        // Only fixes too coarse to place the user at all are dropped here -- anything within the
+        // server's 200 m stay radius is kept, since an indoor stay may produce nothing better
+        // (weak GPS, Wi-Fi/cell positioning only), and dropping those lost whole stays. Fixes
+        // too coarse for the track or street matching are filtered where those are drawn and
+        // matched instead (LocationPoint.isPrecise).
+        if (location.accuracy > MAX_RECORDED_ACCURACY_METERS) return
 
-        serviceScope.launch {
-            val point = LocationPoint(
+        record(
+            LocationPoint(
                 latitude = location.latitude,
                 longitude = location.longitude,
                 timestampMillis = location.time,
                 accuracyMeters = location.accuracy,
-            )
-            locationPointRepository.insert(point)
-            sessionPointCount++
-            startForeground(TrackingNotification.NOTIFICATION_ID, TrackingNotification.build(this@TrackingService, sessionPointCount))
+            ),
+        )
+    }
 
-            val previous = lastAcceptedPoint
-            lastAcceptedPoint = point
+    private fun record(point: LocationPoint) {
+        // The fused provider re-delivers its cached fix whenever a request is registered -- on
+        // start, and on every stationary/moving swap -- which would otherwise store it twice.
+        val previousRecorded = lastRecordedPoint
+        if (previousRecorded != null && point.timestampMillis <= previousRecorded.timestampMillis) return
+        lastRecordedPoint = point
+
+        val previousPrecise = lastPrecisePoint
+        if (point.isPrecise) lastPrecisePoint = point
+        val pointCount = ++sessionPointCount
+
+        serviceScope.launch {
+            locationPointRepository.insert(point)
+            startForeground(TrackingNotification.NOTIFICATION_ID, TrackingNotification.build(this@TrackingService, pointCount))
+
+            if (!point.isPrecise) return@launch
             // Decorative/best-effort, same as everywhere else this app talks to Overpass --
             // never let a coverage-matching hiccup interrupt tracking itself. Whatever isn't
             // recorded this time gets picked up again on the next fix.
             try {
-                visitedStreetCoverageRepository.recordVisitedSegments(listOfNotNull(previous, point))
+                visitedStreetCoverageRepository.recordVisitedSegments(listOfNotNull(previousPrecise, point))
             } catch (e: Exception) {
                 // ignored
             }
         }
+    }
+
+    // Pins a stay's arrival to where the user actually stopped: the last fix delivered may be
+    // from the approach, up to a full interval (and then some) short of the spot. Taken once,
+    // right as GPS is about to go off for the duration of the stay.
+    private fun recordArrivalFix() {
+        try {
+            fusedLocationClient.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, null)
+                .addOnSuccessListener { location -> location?.let(::onNewLocation) }
+        } catch (e: SecurityException) {
+            // Permission revoked mid-session -- the next location request fails and stops tracking.
+        }
+    }
+
+    // Activity recognition says the user stayed put until now, even though GPS was off the whole
+    // time, so the stay's last point is placed at the stay itself, timestamped now. Otherwise the
+    // stay would end at the first fix after GPS comes back -- which, given how long a STILL exit
+    // takes to arrive, can already be down the street, and the server only bridges a long silent
+    // gap into one stay when both of its ends are within 50 m of each other.
+    private fun recordDepartureAnchor() {
+        val stayPoint = lastRecordedPoint ?: return
+        record(stayPoint.copy(id = 0, timestampMillis = System.currentTimeMillis(), syncedAtMillis = null))
     }
 
     // Swapping the request on the same callback replaces the old one -- the fused provider keeps
@@ -180,6 +228,7 @@ class TrackingService : Service() {
         val callback = locationCallback ?: return
         if (stationary == isStationary) return
         isStationary = stationary
+        if (stationary) recordArrivalFix() else recordDepartureAnchor()
 
         val request = if (stationary) stationaryLocationRequest else movingLocationRequest
         try {
@@ -222,7 +271,8 @@ class TrackingService : Service() {
         private const val ACTION_STOP = "io.github.DanielOfRivia.street_viewer_v2.action.STOP"
         private const val UPDATE_INTERVAL_MILLIS = 30_000L
         private const val MIN_UPDATE_DISTANCE_METERS = 10f
-        private const val MAX_ACCEPTABLE_ACCURACY_METERS = 50f
+        // Matches the server's stay-detection radius (STAY_DIST_THRESHOLD_M).
+        private const val MAX_RECORDED_ACCURACY_METERS = 200f
 
         fun start(context: Context) {
             ContextCompat.startForegroundService(context, Intent(context, TrackingService::class.java))

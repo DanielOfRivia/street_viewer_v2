@@ -48,7 +48,7 @@ class MapViewModel @Inject constructor(
             localDayPoints
         } else {
             mergeWithLocal(loadState.historicalPoints.orEmpty(), localDayPoints)
-        }
+        }.filter { it.isPrecise }
         MapUiState(
             selectedDate = date,
             points = points,
