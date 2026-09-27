@@ -96,6 +96,6 @@ class App : Application(), Configuration.Provider {
 
     private companion object {
         // Bump the version to force another rebuild after the next matching-rule change.
-        val KEY_REBUILT = booleanPreferencesKey("visited_streets_rebuilt_v2")
+        val KEY_REBUILT = booleanPreferencesKey("visited_streets_rebuilt_v4")
     }
 }

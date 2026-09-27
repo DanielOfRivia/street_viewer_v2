@@ -136,10 +136,10 @@ class LocationGapFillerTest {
 
     @Test
     fun customSpeedLimitIsRespected() {
-        // ~22m in 5s -> ~16 km/h, e.g. cycling
+        // ~22m in 6s -> ~13 km/h, e.g. a run
         val points = listOf(
             point(0.0, 0.0000, timestampMillis = 0L),
-            point(0.0, 0.0002, timestampMillis = 5_000L),
+            point(0.0, 0.0002, timestampMillis = 6_000L),
         )
 
         assertEquals(2, LocationGapFiller.fillGaps(points).size)

@@ -20,7 +20,7 @@ object LocationGapFiller {
         points: List<LocationPoint>,
         maxTimeGapMillis: Long = 90_000L,
         maxSegmentMeters: Double = 30.0,
-        maxSpeedKmh: Double = 35.0,
+        maxSpeedKmh: Double = 15.0,
     ): List<LocationPoint> {
         if (points.size < 2) return points
 
