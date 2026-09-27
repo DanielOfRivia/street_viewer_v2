@@ -16,4 +16,8 @@ class FakeVisitedStreetSegmentDao : VisitedStreetSegmentDao {
     }
 
     override fun observeAll(): Flow<List<VisitedStreetSegmentEntity>> = segments
+
+    override suspend fun deleteAll() {
+        segments.value = emptyList()
+    }
 }

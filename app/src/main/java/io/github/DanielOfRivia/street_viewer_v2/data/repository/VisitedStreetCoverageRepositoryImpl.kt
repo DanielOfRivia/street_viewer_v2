@@ -35,11 +35,40 @@ class VisitedStreetCoverageRepositoryImpl @Inject constructor(
     override suspend fun recordVisitedSegments(points: List<LocationPoint>) {
         if (points.isEmpty()) return
 
-        val filled = LocationGapFiller.fillGaps(points)
-        val visitedPoints = filled.map { LatLon(it.latitude, it.longitude) }
-        val requiredBounds = MapBounds.ofPoints(visitedPoints)
+        val visitedPoints = visitedPointsOf(points)
+        // Every point may have been dropped as too fast (e.g. both ends of a pair during a drive).
+        if (visitedPoints.isEmpty()) return
 
-        val ways = cacheMutex.withLock {
+        val (ways, _) = waysCovering(MapBounds.ofPoints(visitedPoints))
+
+        val newSegments = ways.flatMap { way -> visitedSegmentsOf(way, visitedPoints) }
+        if (newSegments.isNotEmpty()) {
+            dao.insertAll(newSegments)
+        }
+    }
+
+    override suspend fun rebuildVisitedSegments(points: List<LocationPoint>): Boolean {
+        val visitedPoints = visitedPointsOf(points)
+        if (visitedPoints.isEmpty()) {
+            dao.replaceAll(emptyList())
+            return true
+        }
+
+        // Unlike an incremental record, a partial result here would wipe streets that are only
+        // missing because Overpass was unreachable -- all or nothing.
+        val (ways, covered) = waysCovering(MapBounds.ofPoints(visitedPoints))
+        if (!covered) return false
+
+        dao.replaceAll(ways.flatMap { way -> visitedSegmentsOf(way, visitedPoints) })
+        return true
+    }
+
+    private fun visitedPointsOf(points: List<LocationPoint>): List<LatLon> =
+        LocationGapFiller.fillGaps(points).map { LatLon(it.latitude, it.longitude) }
+
+    /** The cached ways, and whether they're known to cover all of [requiredBounds]. */
+    private suspend fun waysCovering(requiredBounds: MapBounds): Pair<List<OsmWay>, Boolean> =
+        cacheMutex.withLock {
             val cached = cachedBounds
             // Refetches only when the visited area grows past what's already cached, not on
             // every single new point -- Overpass is a shared public resource and street
@@ -56,14 +85,8 @@ class VisitedStreetCoverageRepositoryImpl @Inject constructor(
                     cachedBounds = paddedBounds
                 }
             }
-            cachedWays
+            cachedWays to (cachedBounds?.contains(requiredBounds) == true)
         }
-
-        val newSegments = ways.flatMap { way -> visitedSegmentsOf(way, visitedPoints) }
-        if (newSegments.isNotEmpty()) {
-            dao.insertAll(newSegments)
-        }
-    }
 
     private fun visitedSegmentsOf(way: OsmWay, visitedPoints: List<LatLon>): List<VisitedStreetSegmentEntity> {
         if (way.nodes.size < 2) return emptyList()

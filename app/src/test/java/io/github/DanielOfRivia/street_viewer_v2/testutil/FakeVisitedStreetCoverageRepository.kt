@@ -16,4 +16,9 @@ class FakeVisitedStreetCoverageRepository : VisitedStreetCoverageRepository {
     override suspend fun recordVisitedSegments(points: List<LocationPoint>) {
         recordedCalls.add(points)
     }
+
+    override suspend fun rebuildVisitedSegments(points: List<LocationPoint>): Boolean {
+        recordedCalls.add(points)
+        return true
+    }
 }

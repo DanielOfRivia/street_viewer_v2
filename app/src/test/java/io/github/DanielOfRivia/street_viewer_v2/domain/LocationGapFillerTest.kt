@@ -62,9 +62,9 @@ class LocationGapFillerTest {
 
     @Test
     fun aLargeGapAfterTrackingWasOffIsNotBridgedWithInventedPoints() {
-        // e.g. tracking stopped, phone moved across town, tracking resumed
+        // e.g. tracking stopped, phone moved a few km, tracking resumed -- slow on average
         val a = point(0.0, 0.0, timestampMillis = 0L)
-        val b = point(0.0, 1.0, timestampMillis = 3_600_000L) // an hour later, ~111km away
+        val b = point(0.0, 0.03, timestampMillis = 3_600_000L) // an hour later, ~3.3km away
 
         val filled = LocationGapFiller.fillGaps(listOf(a, b))
 
@@ -94,6 +94,56 @@ class LocationGapFillerTest {
 
         assertEquals(5, filled.size) // 3 original + 2 interpolated for the first pair only
         assertEquals(points[2], filled.last())
+    }
+
+    @Test
+    fun drivingPointsAreDroppedEntirely() {
+        // 30s apart, ~500m each -> ~60 km/h
+        val points = (0..3).map { i -> point(0.0, 0.0045 * i, timestampMillis = 30_000L * i) }
+
+        assertEquals(emptyList<LocationPoint>(), LocationGapFiller.fillGaps(points))
+    }
+
+    @Test
+    fun walkEndsAreKeptButTheDriveBetweenThemIsNeitherKeptNorBridged() {
+        val walkStart = point(0.0, 0.0000, timestampMillis = 0L)
+        val walkEnd = point(0.0, 0.0002, timestampMillis = 30_000L) // ~22m in 30s, walking
+        val driving = point(0.0, 0.0047, timestampMillis = 60_000L) // ~500m in 30s
+        val parked = point(0.0, 0.0092, timestampMillis = 89_000L) // ~500m in 29s
+        val walkAgain = point(0.0, 0.0094, timestampMillis = 119_000L) // ~22m in 30s
+
+        val filled = LocationGapFiller.fillGaps(listOf(walkStart, walkEnd, driving, parked, walkAgain))
+
+        assertEquals(listOf(walkStart, walkEnd, parked, walkAgain), filled)
+    }
+
+    @Test
+    fun subwayRideIsNotColouredEvenWithALoneFixAtAStation() {
+        val beforeEntering = point(0.0, 0.0000, timestampMillis = 0L)
+        val enteringStation = point(0.0, 0.0002, timestampMillis = 30_000L)
+        // Underground for 5 min, one fix at a station mid-ride ~3.3km on (~40 km/h)
+        val midRide = point(0.0, 0.0302, timestampMillis = 330_000L)
+        // Another 5 min, surfacing another ~3.3km on
+        val surfacing = point(0.0, 0.0602, timestampMillis = 630_000L)
+        val walkingAway = point(0.0, 0.0604, timestampMillis = 660_000L)
+
+        val filled = LocationGapFiller.fillGaps(
+            listOf(beforeEntering, enteringStation, midRide, surfacing, walkingAway),
+        )
+
+        assertEquals(listOf(beforeEntering, enteringStation, surfacing, walkingAway), filled)
+    }
+
+    @Test
+    fun customSpeedLimitIsRespected() {
+        // ~22m in 5s -> ~16 km/h, e.g. cycling
+        val points = listOf(
+            point(0.0, 0.0000, timestampMillis = 0L),
+            point(0.0, 0.0002, timestampMillis = 5_000L),
+        )
+
+        assertEquals(2, LocationGapFiller.fillGaps(points).size)
+        assertEquals(0, LocationGapFiller.fillGaps(points, maxSpeedKmh = 10.0).size)
     }
 
     private fun point(latitude: Double, longitude: Double, timestampMillis: Long) = LocationPoint(

@@ -8,6 +8,7 @@ import io.github.DanielOfRivia.street_viewer_v2.testutil.FakeOverpassClient
 import io.github.DanielOfRivia.street_viewer_v2.testutil.FakeVisitedStreetSegmentDao
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -146,6 +147,63 @@ class VisitedStreetCoverageRepositoryImplTest {
 
         repository.observeVisitedStreetRuns().test {
             assertEquals(1, awaitItem().size)
+        }
+    }
+
+    @Test
+    fun aBatchThatIsEntirelyTooFastRecordsNothingAndDoesNotFetch() = runTest {
+        // ~500m in 30s -> ~60 km/h, e.g. driving
+        repository.recordVisitedSegments(
+            listOf(point(0.0, 0.0, timestampMillis = 0L), point(0.0, 0.0045, timestampMillis = 30_000L)),
+        )
+
+        assertEquals(0, overpassClient.fetchCallCount)
+        repository.observeVisitedStreetRuns().test {
+            assertTrue(awaitItem().isEmpty())
+        }
+    }
+
+    @Test
+    fun rebuildReplacesPreviouslyStoredSegmentsWithOnlyWhatThePointsStillCover() = runTest {
+        overpassClient.ways = listOf(
+            way(1L, LatLon(0.0, 0.000), LatLon(0.0, 0.001), LatLon(0.0, 0.002)),
+        )
+        repository.recordVisitedSegments(listOf(point(0.0, 0.002)))
+
+        val rebuilt = repository.rebuildVisitedSegments(listOf(point(0.0, 0.000)))
+
+        assertTrue(rebuilt)
+        repository.observeVisitedStreetRuns().test {
+            assertEquals(listOf(LatLon(0.0, 0.000), LatLon(0.0, 0.001)), awaitItem().single().points)
+        }
+    }
+
+    @Test
+    fun rebuildKeepsExistingSegmentsWhenStreetsCannotBeFetched() = runTest {
+        overpassClient.ways = listOf(way(1L, LatLon(0.0, 0.0), LatLon(0.0, 0.0001)))
+        repository.recordVisitedSegments(listOf(point(0.0, 0.0)))
+
+        overpassClient.ways = emptyList() // simulates a failed/empty Overpass response
+        val rebuilt = repository.rebuildVisitedSegments(listOf(point(1.0, 1.0)))
+
+        assertFalse(rebuilt)
+        repository.observeVisitedStreetRuns().test {
+            assertEquals(1, awaitItem().size)
+        }
+    }
+
+    @Test
+    fun rebuildWithOnlyTooFastPointsClearsEverything() = runTest {
+        overpassClient.ways = listOf(way(1L, LatLon(0.0, 0.0), LatLon(0.0, 0.0001)))
+        repository.recordVisitedSegments(listOf(point(0.0, 0.0)))
+
+        val rebuilt = repository.rebuildVisitedSegments(
+            listOf(point(0.0, 0.0, timestampMillis = 0L), point(0.0, 0.0045, timestampMillis = 30_000L)),
+        )
+
+        assertTrue(rebuilt)
+        repository.observeVisitedStreetRuns().test {
+            assertTrue(awaitItem().isEmpty())
         }
     }
 

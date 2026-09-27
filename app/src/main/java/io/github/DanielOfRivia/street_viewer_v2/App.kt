@@ -13,11 +13,13 @@ import com.google.android.gms.maps.MapsInitializer
 import dagger.hilt.android.HiltAndroidApp
 import io.github.DanielOfRivia.street_viewer_v2.domain.model.LocationHistoryResult
 import io.github.DanielOfRivia.street_viewer_v2.domain.repository.LocationHistoryRepository
+import io.github.DanielOfRivia.street_viewer_v2.domain.repository.LocationPointRepository
 import io.github.DanielOfRivia.street_viewer_v2.domain.repository.VisitedStreetCoverageRepository
 import io.github.DanielOfRivia.street_viewer_v2.service.SyncWorker
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
@@ -34,6 +36,9 @@ class App : Application(), Configuration.Provider {
 
     @Inject
     lateinit var locationHistoryRepository: LocationHistoryRepository
+
+    @Inject
+    lateinit var locationPointRepository: LocationPointRepository
 
     @Inject
     lateinit var visitedStreetCoverageRepository: VisitedStreetCoverageRepository
@@ -57,29 +62,40 @@ class App : Application(), Configuration.Provider {
             ExistingPeriodicWorkPolicy.KEEP,
             SyncWorker.periodicRequest(),
         )
-        appScope.launch { backfillVisitedStreetsOnce() }
+        appScope.launch { rebuildVisitedStreetsOnce() }
     }
 
     // The visited-streets table only ever gets filled incrementally from new fixes as they're
     // tracked (see TrackingService) -- history recorded before this feature existed would
-    // otherwise never be reflected. Runs once per install, using the same locations endpoint
-    // the map already calls for historical days, just with the widest possible range.
-    private suspend fun backfillVisitedStreetsOnce() {
-        val alreadyBackfilled = preferencesDataStore.data.map { it[KEY_BACKFILLED] ?: false }
-        if (alreadyBackfilled.firstOrNull() == true) return
+    // otherwise never be reflected, and neither would a change to the matching rules (e.g. the
+    // walking-speed filter, which should also un-colour streets only ever driven along). Runs
+    // once per install per KEY_REBUILT, using the same locations endpoint the map already calls
+    // for historical days, just with the widest possible range.
+    private suspend fun rebuildVisitedStreetsOnce() {
+        val alreadyRebuilt = preferencesDataStore.data.map { it[KEY_REBUILT] ?: false }
+        if (alreadyRebuilt.firstOrNull() == true) return
 
         val result = locationHistoryRepository.getLocationsInRange(0L, System.currentTimeMillis())
-        if (result is LocationHistoryResult.Success) {
-            if (result.points.isNotEmpty()) {
-                visitedStreetCoverageRepository.recordVisitedSegments(result.points)
-            }
-            preferencesDataStore.edit { it[KEY_BACKFILLED] = true }
-        }
         // A Failure (offline, server down) leaves the flag unset -- retried on the next app
-        // start rather than silently giving up on history that was never actually processed.
+        // start rather than wiping coverage for history that was never actually processed.
+        if (result !is LocationHistoryResult.Success) return
+
+        // The server lacks whatever hasn't been uploaded yet -- without those, the rebuild would
+        // wipe streets walked since the last sync. Matched on timestamp, preserved exactly
+        // through upload.
+        val serverTimestamps = result.points.mapTo(HashSet()) { it.timestampMillis }
+        val localOnly = locationPointRepository.observeAllPoints().first()
+            .filter { it.timestampMillis !in serverTimestamps }
+
+        // False when Overpass couldn't be reached -- existing coverage is kept as is, retried
+        // on the next app start.
+        if (visitedStreetCoverageRepository.rebuildVisitedSegments(result.points + localOnly)) {
+            preferencesDataStore.edit { it[KEY_REBUILT] = true }
+        }
     }
 
     private companion object {
-        val KEY_BACKFILLED = booleanPreferencesKey("visited_streets_backfilled")
+        // Bump the version to force another rebuild after the next matching-rule change.
+        val KEY_REBUILT = booleanPreferencesKey("visited_streets_rebuilt_v2")
     }
 }

@@ -14,4 +14,11 @@ interface VisitedStreetCoverageRepository {
      * whole day's (or a whole history's) worth of points at once, e.g. for a one-time backfill.
      */
     suspend fun recordVisitedSegments(points: List<LocationPoint>)
+
+    /**
+     * Recomputes coverage from scratch out of [points] and replaces everything stored with it,
+     * e.g. after the matching rules change. Leaves the stored segments untouched and returns
+     * false when the street geometry for the whole area couldn't be fetched.
+     */
+    suspend fun rebuildVisitedSegments(points: List<LocationPoint>): Boolean
 }

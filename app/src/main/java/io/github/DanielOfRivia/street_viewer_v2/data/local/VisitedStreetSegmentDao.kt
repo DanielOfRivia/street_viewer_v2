@@ -4,6 +4,7 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Transaction
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -16,4 +17,14 @@ interface VisitedStreetSegmentDao {
 
     @Query("SELECT * FROM visited_street_segments")
     fun observeAll(): Flow<List<VisitedStreetSegmentEntity>>
+
+    @Query("DELETE FROM visited_street_segments")
+    suspend fun deleteAll()
+
+    // One transaction, so the map never observes the empty table in between.
+    @Transaction
+    suspend fun replaceAll(segments: List<VisitedStreetSegmentEntity>) {
+        deleteAll()
+        insertAll(segments)
+    }
 }
