@@ -151,6 +151,48 @@ class MapViewModelTest {
     }
 
     @Test
+    fun pastDayMergesNotYetUploadedLocalPointsIntoTheServerTrack() = runTest(dispatcher) {
+        val pastDate = LocalDate.now().minusDays(1)
+        val dayStart = pastDate.atStartOfDay(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
+        val uploaded = pastDayPoint(dayStart + 100L, syncedAtMillis = 1L)
+        val pendingUpload = pastDayPoint(dayStart + 200L, syncedAtMillis = null)
+        locationPointRepository.insert(uploaded)
+        locationPointRepository.insert(pendingUpload)
+        // The server only knows about the uploaded one.
+        locationHistoryRepository.result = LocationHistoryResult.Success(listOf(uploaded.copy(id = 99)))
+
+        viewModel.uiState.test {
+            awaitItem()
+            viewModel.onDateSelected(pastDate)
+            dispatcher.scheduler.advanceUntilIdle()
+
+            val loaded = expectMostRecentItem()
+            assertEquals(listOf(dayStart + 100L, dayStart + 200L), loaded.points.map { it.timestampMillis })
+            assertNull(loaded.errorMessage)
+        }
+    }
+
+    @Test
+    fun failedHistoryFetchFallsBackToLocalPointsForThatDay() = runTest(dispatcher) {
+        val pastDate = LocalDate.now().minusDays(1)
+        val dayStart = pastDate.atStartOfDay(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
+        locationPointRepository.insert(pastDayPoint(dayStart + 100L, syncedAtMillis = 1L))
+        locationPointRepository.insert(pastDayPoint(dayStart + 200L, syncedAtMillis = null))
+        locationPointRepository.insert(point(timestampMillis = 1L)) // today's, must not leak in
+        locationHistoryRepository.result = LocationHistoryResult.Failure("offline")
+
+        viewModel.uiState.test {
+            awaitItem()
+            viewModel.onDateSelected(pastDate)
+            dispatcher.scheduler.advanceUntilIdle()
+
+            val loaded = expectMostRecentItem()
+            assertEquals(listOf(dayStart + 100L, dayStart + 200L), loaded.points.map { it.timestampMillis })
+            assertEquals("offline", loaded.errorMessage)
+        }
+    }
+
+    @Test
     fun switchingBackToTodayClearsErrorAndShowsLivePoints() = runTest(dispatcher) {
         locationPointRepository.insert(point(timestampMillis = 1L))
         locationHistoryRepository.result = LocationHistoryResult.Failure("offline")
@@ -262,6 +304,14 @@ class MapViewModelTest {
         .atStartOfDay(java.time.ZoneId.systemDefault())
         .toInstant()
         .toEpochMilli()
+
+    private fun pastDayPoint(timestampMillis: Long, syncedAtMillis: Long?) = LocationPoint(
+        latitude = 43.6532,
+        longitude = -79.3832,
+        timestampMillis = timestampMillis,
+        accuracyMeters = 6.4f,
+        syncedAtMillis = syncedAtMillis,
+    )
 
     // MapViewModel now filters "today" live points down to today's own range (it used to pass
     // observeAllPoints() through unfiltered, which leaked points from the whole 30-day local

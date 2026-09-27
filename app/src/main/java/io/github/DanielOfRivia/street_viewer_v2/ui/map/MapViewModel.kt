@@ -42,11 +42,12 @@ class MapViewModel @Inject constructor(
     ) { date, livePoints, loadState, streetRuns ->
         // observeAllPoints() returns everything still in local storage (up to the 30-day
         // retention window), not just today -- filter down to the selected day's own range.
+        val (startMillis, endMillis) = dayRangeMillis(date)
+        val localDayPoints = livePoints.filter { it.timestampMillis in startMillis..endMillis }
         val points = if (date == LocalDate.now()) {
-            val (startMillis, endMillis) = dayRangeMillis(date)
-            livePoints.filter { it.timestampMillis in startMillis..endMillis }
+            localDayPoints
         } else {
-            loadState.historicalPoints.orEmpty()
+            mergeWithLocal(loadState.historicalPoints.orEmpty(), localDayPoints)
         }
         MapUiState(
             selectedDate = date,
@@ -72,6 +73,18 @@ class MapViewModel @Inject constructor(
         // day's track/pins/error never flash while the new day is loading.
         dayLoadState.value = DayLoadState(isLoading = true)
         loadDay(date)
+    }
+
+    // The server only has what's been uploaded so far -- points still waiting for the next
+    // sync live only in local storage, and when the fetch fails the server contributes nothing
+    // at all. Fill both gaps from local storage, matching on timestamp (preserved exactly
+    // through upload) rather than the synced flag, so a point that gets synced after this
+    // day's fetch completed isn't dropped from the track until the next reload.
+    private fun mergeWithLocal(serverPoints: List<LocationPoint>, localPoints: List<LocationPoint>): List<LocationPoint> {
+        val serverTimestamps = serverPoints.mapTo(HashSet()) { it.timestampMillis }
+        val localOnly = localPoints.filter { it.timestampMillis !in serverTimestamps }
+        if (localOnly.isEmpty()) return serverPoints
+        return (serverPoints + localOnly).sortedBy { it.timestampMillis }
     }
 
     private fun dayRangeMillis(date: LocalDate): Pair<Long, Long> {
