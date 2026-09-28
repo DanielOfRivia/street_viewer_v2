@@ -1,8 +1,8 @@
 # Street Viewer (Android)
 
-A personal GPS tracker for Android. It records where you walk, uploads the track to a small
+A personal GPS tracker for Android. It records where you move, uploads the track to a small
 self-hosted backend, and shows each day's route on a map along with the places you stayed and
-the streets you've covered on foot.
+the streets you've covered on foot, either by walking or running.
 
 The backend lives in a separate repo: **[Street_viewer_api](https://github.com/DanielOfRivia/Street_viewer_api)**.
 
@@ -18,7 +18,7 @@ The backend lives in a separate repo: **[Street_viewer_api](https://github.com/D
   (detected server-side, with address and businesses at that spot).
 - **Street coverage**: streets you've walked are coloured on the map. Street geometry comes
   from OpenStreetMap via the public [Overpass API](https://overpass-api.de/). Driving and
-  other fast travel are ignored.
+  other fast travel are ignored. The speed limit is hardcoded and set to 15 km/h by default.
 - **Survives reboots**: if tracking was on, it restarts after boot, or posts a notification
   to resume it when Android doesn't allow a location service to start in the background.
 
