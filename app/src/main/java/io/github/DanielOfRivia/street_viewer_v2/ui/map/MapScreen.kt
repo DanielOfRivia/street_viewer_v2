@@ -71,6 +71,8 @@ import java.time.format.DateTimeFormatter
 
 private const val DEFAULT_ZOOM = 15f
 private const val ARROW_POINT_INTERVAL = 5
+private const val VISITED_STREET_Z_INDEX = 0f
+private const val TRACK_Z_INDEX = 1f
 private val VisitedStreetColor = Color(0xFF00C853)
 private val TrackColor = Color.Black
 
@@ -160,15 +162,19 @@ private fun TrackMap(uiState: MapUiState, modifier: Modifier = Modifier) {
         modifier = modifier,
         cameraPositionState = cameraPositionState,
     ) {
-        movementSegments.forEach { segment ->
-            Polyline(points = segment.map { it.toLatLng() }, color = TrackColor)
-        }
+        // Explicit z-indices rather than relying on call order: Google Maps draws same-z-index
+        // overlays in an arbitrary order. The thick coverage lines sit underneath, so the thin
+        // track stays readable on top of them (markers, like the arrows, always draw above both).
         uiState.visitedStreetRuns.forEach { run ->
             Polyline(
                 points = run.points.map { it.toLatLng() },
                 color = VisitedStreetColor,
                 width = 12f,
+                zIndex = VISITED_STREET_Z_INDEX,
             )
+        }
+        movementSegments.forEach { segment ->
+            Polyline(points = segment.map { it.toLatLng() }, color = TrackColor, zIndex = TRACK_Z_INDEX)
         }
 
         movementSegments.forEach { segment ->
