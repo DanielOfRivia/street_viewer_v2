@@ -34,7 +34,14 @@ object NetworkModule {
     // it's genuinely still sent -- it'd just look like it's missing.
     private fun OkHttpClient.Builder.withDebugLoggingLast(): OkHttpClient.Builder = apply {
         if (BuildConfig.DEBUG) {
-            addInterceptor(HttpLoggingInterceptor().apply { level = HttpLoggingInterceptor.Level.BODY })
+            addInterceptor(
+                HttpLoggingInterceptor().apply {
+                    level = HttpLoggingInterceptor.Level.BODY
+                    // Logs the rest of each request, but never the backend's key itself --
+                    // anyone with adb access could otherwise read it straight out of logcat.
+                    redactHeader(API_KEY_HEADER)
+                },
+            )
         }
     }
 
