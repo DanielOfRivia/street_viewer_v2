@@ -6,6 +6,21 @@ the streets you've covered on foot, either by walking or running.
 
 The backend lives in a separate repo: **[Street_viewer_api](https://github.com/DanielOfRivia/Street_viewer_api)**.
 
+<table>
+  <tr>
+    <td align="center"><img src="docs/screenshots/day-map.png" width="260" alt="Day map with the walked track, streets coloured green, and two stay pins"></td>
+    <td align="center"><img src="docs/screenshots/stay-details.png" width="260" alt="A stay pin showing its address and visit time range"></td>
+    <td align="center"><img src="docs/screenshots/tracking.png" width="260" alt="Tracking screen showing the recorded point count and a Stop Tracking button"></td>
+  </tr>
+  <tr>
+    <td align="center">A day's track, walked streets and stays</td>
+    <td align="center">Stay details</td>
+    <td align="center">Tracking</td>
+  </tr>
+</table>
+
+<sub>Screenshots use a made-up walk in Amsterdam, run against a demo backend.</sub>
+
 ## Features
 
 - **Background tracking**: a foreground service records a GPS fix every 30 seconds (and only
